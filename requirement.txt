@@ -1,0 +1,8 @@
+boto3
+faiss-cpu
+pymysql
+requests
+flask_restful
+flask
+pandas
+openpyxl
