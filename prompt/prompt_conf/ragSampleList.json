@@ -1,0 +1,12 @@
+[
+  {
+    "question": "上海下单用户有多少？",
+    "answerSQL": "",
+    "answerInsight": "需要确定用户都有过下单行为"
+  },
+  {
+    "question": "导出一月 二月 三月 不通sku的商品销量",
+    "answerSQL": "",
+    "answerInsight": ""
+  }
+]

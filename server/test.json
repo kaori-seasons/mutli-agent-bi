@@ -1,0 +1,9 @@
+{
+    "query": "上海地区男装的销量",
+    "finalSQL": "SELECT g.sku, SUM(od.good_count) AS total_sales FROM business.order_detail od JOIN business.user u ON od.user_mail = u.user_mail JOIN business.goods g ON od.goods_id = g.goods_id WHERE u.city = 'shanghai' AND g.sku IN ('boy shirt', 'boy shoes', 'boy pants', 'boy coat') GROUP BY g.sku ORDER BY total_sales DESC LIMIT 50",
+    "chartType": "BarChartPic",
+    "columnList": [
+        "sku",
+        "total_sales"
+    ]
+}
