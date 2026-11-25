@@ -1,2 +1,9 @@
 node_modules
 test-results
+
+.env
+.env.*
+.git
+var
+__pycache__
+*.pyc

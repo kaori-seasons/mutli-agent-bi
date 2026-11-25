@@ -1,4 +1,4 @@
-from prompt import tool, loader, gen
+from prompt import tool, gen
 from server import conf, aws
 import os
 import json
@@ -8,25 +8,22 @@ from server.db import mysql
 from openpyxl import Workbook
 
 
-conf.load_env()
-
-bucket_name = os.getenv("BUCKET_NAME")
-example_file = os.getenv("EXAMPLE_FILE_NAME")
-prompt_file = os.getenv("PROMPT_FILE_NAME")
-rag_file = os.getenv("RAG_FILE_NAME")
-
-
-data_files = f"{os.getcwd()}/prompt/data/promptdata"
-save_to_path = f"{os.getcwd()}/prompt/prompt_conf"
-
-
-prompt_file_name = prompt_file.split("/")[1]
-example_file_name = example_file.split("/")[1]
-rag_file_name = rag_file.split("/")[1]
-
-prompt_path = save_to_path + "/" + prompt_file_name
-example_path = save_to_path + "/" + example_file_name
-rag_path = save_to_path + "/" + rag_file_name
+def configure_assets():
+    # 命令启动时才加载环境，导入模块不访问配置或外部服务。
+    global bucket_name, example_file, prompt_file, rag_file
+    global data_files, save_to_path, prompt_path, example_path, rag_path
+    conf.load_env()
+    bucket_name = os.getenv("BUCKET_NAME")
+    example_file = os.getenv("EXAMPLE_FILE_NAME")
+    prompt_file = os.getenv("PROMPT_FILE_NAME")
+    rag_file = os.getenv("RAG_FILE_NAME")
+    data_files = f"{os.getcwd()}/prompt/data/promptdata"
+    save_to_path = f"{os.getcwd()}/prompt/prompt_conf"
+    prompt_path = save_to_path + "/" + prompt_file.split("/")[1]
+    example_path = save_to_path + "/" + example_file.split("/")[1]
+    rag_path = save_to_path + "/" + rag_file.split("/")[1]
+    os.makedirs(data_files, exist_ok=True)
+    os.makedirs(save_to_path, exist_ok=True)
 
 
 def confirm_action(prompt_input):
@@ -51,6 +48,7 @@ def template_command(args):
     table_names = tables
     wb = Workbook()
     tables_desc = list()
+    ontology_analyses = []
     for table_name in table_names:
         print(f"开始处理表{table_name}...")
         bedrock = aws.get('bedrock-runtime')
@@ -93,6 +91,7 @@ def template_command(args):
 
         ws = wb.create_sheet(title=table_name)
 
+        ontology_analyses.append((pyob_lst, schema))
         table_desc = pyob_lst['desc']
         columns = pyob_lst['columns']
         tables_desc.append(table_desc)
@@ -119,15 +118,36 @@ def template_command(args):
     # 将DataFrame保存为Excel文件
     wb.save(f"{data_files}/{scenario}.xlsx")
     print(f"处理完毕，生成的template 文件位于{data_files}/{scenario}.xlsx")
+    conn.close()
+    _ontology_write("analysis", scenario=scenario, analyses=ontology_analyses)
 
 
 def prompt_command():
     print("请确认您已经创建了好了提示词模板并进行了人工Review！默认情况下提示词模板excel文件存放在prompt/data/promptdata/路径下")
     if confirm_action("输入 'y' 表示你创建好了提示词模板并进行了reivew，输入 'n' 退出："):
         tool.run(data_files, prompt_path)
-        aws.upload_file_to_s3(prompt_path, bucket_name, prompt_file)
-        aws.upload_file_to_s3(example_path, bucket_name, example_file)
-        aws.upload_file_to_s3(rag_path, bucket_name, rag_file)
+        published = [
+            aws.upload_file_to_s3(prompt_path, bucket_name, prompt_file),
+            aws.upload_file_to_s3(example_path, bucket_name, example_file),
+            aws.upload_file_to_s3(rag_path, bucket_name, rag_file),
+        ]
+        if all(result is True for result in published):
+            _ontology_write("publish")
+        else:
+            print("既有发布未全部成功，本体审核区未更新；请检查发布后离线重试")
+
+
+def _ontology_write(mode, **kwargs):
+    # 延迟导入与最终隔离，连本体包/日志故障也不能改变原命令结果。
+    try:
+        from ontology.extractor import safe_publish_workbooks, safe_write_analysis
+        namespace = os.getenv("ONTOLOGY_NAMESPACE", "default")
+        if mode == "analysis":
+            return safe_write_analysis(kwargs["scenario"], kwargs["analyses"], namespace)
+        return safe_publish_workbooks(data_files, namespace, os.getenv("SQL_TEMPLATE_PATH"))
+    except Exception as exc:
+        print(f"本体双写失败（{type(exc).__name__}），既有产物已保留，请用 python -m ontology extract 离线重试")
+        return None
 
 
 def main():
@@ -148,6 +168,8 @@ def main():
         "prompt", help="生成提示词文件，并上传到S3中，执行前请确保已经生成了提示词模板，并人工进行reivw")
 
     args = parser.parse_args()
+    if args.command in {"template", "prompt"}:
+        configure_assets()
     if args.command == "template":
         template_command(args)
     elif args.command == "prompt":
@@ -156,4 +178,5 @@ def main():
         parser.print_help()
 
 
-main()
+if __name__ == "__main__":
+    main()

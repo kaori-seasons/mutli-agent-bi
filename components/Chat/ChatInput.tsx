@@ -1,3 +1,4 @@
+import { authFetch } from '@/utils/app/authFetch';
 import {
   IconArrowDown,
   IconFileUpload,
@@ -129,7 +130,7 @@ export const ChatInput = ({
       formData.append('file', file);
 
       try {
-        const response = await fetch('/api/uploadFile', {
+        const response = await authFetch('/api/uploadFile', {
           method: 'POST',
           body: formData,
         });

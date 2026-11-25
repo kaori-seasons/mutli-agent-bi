@@ -15,7 +15,7 @@ def read_conf_from_s3(s3_client, bucket, key):
         json_object = json.loads(file_content)
         return json_object
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"prompt_asset_read_failed type={type(e).__name__}")
         return None
 
 def get(file_key)->dict:

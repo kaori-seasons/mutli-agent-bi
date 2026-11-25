@@ -1,12 +1,15 @@
 FROM tiangolo/uwsgi-nginx-flask:python3.12
 RUN echo "uwsgi_read_timeout 600s;" > /etc/nginx/conf.d/custom_timeout.conf
-COPY ./requirement.txt /app/requirements.txt
+COPY ./requirements.lock /app/requirements.txt
 
-RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r /app/requirements.txt
 RUN mkdir server
 RUN mkdir logs
 RUN mkdir downloads
 EXPOSE 5018
 COPY ./server/. /app/server
-COPY ./.env /app
+COPY ./ontology/. /app/ontology
+ENV ONTOLOGY_STORE_PATH=/app/var/ontology
+ENV ONTOLOGY_REGISTRY_PATH=/app/var/registry/registry.sqlite3
+
 COPY ./main.py /app

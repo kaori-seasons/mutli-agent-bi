@@ -22,6 +22,7 @@
     "@dqbd/tiktoken": "^1.0.2",
     "@tabler/icons-react": "^2.9.0",
     "@types/pg": "^8.11.5",
+    "aws-amplify": "6.5.0",
     "axios": "^1.7.3",
     "eventsource-parser": "^0.1.0",
     "formidable": "^3.5.2",

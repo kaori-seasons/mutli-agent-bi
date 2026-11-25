@@ -1,0 +1,15 @@
+# 本体运行数据与 Python 自动生成产物
+/var/ontology/
+__pycache__/
+*.py[cod]
+/chatbi.log*
+/logs/*.log*
+
+.env
+.env.*
+!.env_template
+/var/exports/
+/var/registry/
+/node_modules/
+/.next/
+*.tsbuildinfo

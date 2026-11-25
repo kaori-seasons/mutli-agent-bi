@@ -823,11 +823,9 @@ const getS3JsonFile = async (fileName: string | undefined) => {
         fileResultStr += convertedString;
       }
     }
-    console.log('====>> ')
-    console.log(JSON.parse(fileResultStr))
     return JSON.parse(fileResultStr);
   } catch (error) {
-    console.log('getS3JsonFile', error);
+    console.error('Prompt asset read failed');
     return [];
   }
 };

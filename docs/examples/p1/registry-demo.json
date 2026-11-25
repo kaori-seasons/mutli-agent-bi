@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "namespace": "default",
+  "entities": [
+    {
+      "id": "source:a",
+      "kind": "DataSource",
+      "version": 1,
+      "name": "a",
+      "owner": "owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [],
+      "availability": "reference",
+      "attributes": {
+        "engine": "mysql",
+        "database": "db_a",
+        "credential_ref": "source:a"
+      },
+      "legacy": {}
+    },
+    {
+      "id": "dataset:orders",
+      "kind": "Dataset",
+      "version": 1,
+      "name": "订单",
+      "owner": "owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "source:a"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "physical_name": "orders",
+        "primary_key": []
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:city",
+      "kind": "Field",
+      "version": 1,
+      "name": "city",
+      "owner": "owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "city",
+        "dtype": "varchar",
+        "primary_key": false
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:amount",
+      "kind": "Field",
+      "version": 1,
+      "name": "amount",
+      "owner": "owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "amount",
+        "dtype": "decimal",
+        "primary_key": false
+      },
+      "legacy": {}
+    },
+    {
+      "id": "template:sales",
+      "kind": "QueryTemplate",
+      "version": 1,
+      "name": "城市销售额",
+      "owner": "owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders",
+        "field:city",
+        "field:amount"
+      ],
+      "availability": "executable",
+      "attributes": {
+        "sql": "SELECT city, SUM(amount) AS total FROM orders WHERE city='{0}' GROUP BY city",
+        "parameters": [
+          {
+            "name": "city",
+            "dtype": "string",
+            "example": "上海"
+          }
+        ],
+        "outputs": [
+          "city",
+          "total"
+        ],
+        "column_types": [
+          "维度",
+          "度量"
+        ],
+        "question_pattern": "{0}销售额",
+        "merge": null
+      },
+      "legacy": {}
+    }
+  ],
+  "migration": {}
+}

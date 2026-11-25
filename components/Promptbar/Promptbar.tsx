@@ -1,3 +1,4 @@
+import { authFetch } from '@/utils/app/authFetch';
 import { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -99,7 +100,7 @@ const Promptbar = () => {
     if (prompts && prompts.length > 0) {
       return;
     }
-    const response = await fetch('/api/getDefaultPrompt', {
+    const response = await authFetch('/api/getDefaultPrompt', {
       method: 'GET',
     });
     const result = await response.json();

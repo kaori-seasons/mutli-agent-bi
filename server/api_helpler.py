@@ -1,20 +1,4 @@
 import os
-import logging
-import threading
-from logging.handlers import RotatingFileHandler
-from queue import Queue
-import pandas as pd
-
-
-from .db import mysql
-
-logger = logging.getLogger(__name__)
-
-# 设置日志级别
-logger.setLevel(logging.INFO)
-# 创建一个handler，用于写入日志文件
-handler = RotatingFileHandler('chatbi.log', maxBytes=100000, backupCount=3)
-logger.addHandler(handler)
 
 class Helper:
 
@@ -96,7 +80,7 @@ class Helper:
         try:
             index = 0
             for row in rows:
-                if index > max_row:
+                if index >= max_row:
                     break
                 
                 items = [item for item in row]
@@ -114,102 +98,19 @@ class Helper:
         
     
     @staticmethod
-    def query_db(db_info:dict, fmt_sql:str, user_id:str, trace_id:str):
-        logger.info(f"user:{user_id}===>trace id:{trace_id}===>query {db_info['desc']} data")
-        conn = None
-        try:
-            conn = mysql.get_conn(db_info['host'], db_info['port'], db_info['user'], db_info['pwd'], db_info['db'])
-            rows, row_count = mysql.fetch(fmt_sql, conn)
-            return {
-                "rows":rows,
-                "row_count":row_count,
-                "desc":db_info["desc"]
-            }
-        except Exception as ex:
-            logger.error(f"user:{user_id}===>trace id:{trace_id}===>query {fmt_sql} with exception:\n{ex}")
-            return {
-                "row_count":0,
-                "error":ex
-            }
-        finally:
-            if conn:
-                conn.close()
+    def query_db(db_info, fmt_sql, user_id="", trace_id="", budget=None):
+        from .execution import execute_source, QueryBudget
+        return execute_source(db_info, fmt_sql, budget or QueryBudget())
 
     @staticmethod
-    def query_db_async(db_info:dict, fmt_sql:str, result_queue:Queue):
-        logger.info(f"=======================>正在查询{db_info['desc']}的数据")
-        conn = None
-        try:
-            conn = mysql.get_conn(db_info['host'], db_info['port'], db_info['user'], db_info['pwd'], db_info['db'])
-            df = pd.read_sql(fmt_sql, conn) 
-            r = {
-                "rows":df,
-                "row_count":len(df)
-            }
-            result_queue.put(r)
-        except Exception as ex:
-            logger.info(f"=====================>查询数据出现异常{fmt_sql}：\n{ex}")
-            r = {
-                "row_count":0,
-                "error":ex
-            }
-        finally:
-            if conn:
-                conn.close()
-        
+    def query_many_db(db_infos, fmt_sql, budget=None):
+        from .execution import execute_many, QueryBudget
+        return execute_many(db_infos, fmt_sql, budget or QueryBudget())
 
     @staticmethod
-    def query_many_db(db_infos:list, fmt_sql:str)->list:
-        threads = []
-        result_queue = Queue()
-        for db_info in db_infos:
-            # 从连接池获取连接
-            thread = threading.Thread(target=Helper.query_db_async, args=(db_info, fmt_sql, result_queue))
-            threads.append(thread)
-            thread.start()
-
-        for thread in threads:
-            thread.join()
-
-        db_results = list()
-        while not result_queue.empty():
-            db_result = result_queue.get()
-            if "rows" in db_result:
-                db_results.append(db_result)
-        
-        return db_results
-
-    @staticmethod
-    def merge_data(db_results:list, columns:list, columns_type:list):
-        if len(db_results) == 0:
-            return {
-            "rows":[],
-            "row_count":0
-        }
-
-        dfs = [item["rows"] for item in db_results]
-
-        merged_df = pd.concat(dfs, ignore_index=True)
-
-        # 假设dimension1和dimension2是维度，measure1和measure2是度量  
-        dimensions = list() 
-        measures = list() 
-
-        for index in range(0, len(columns)):
-            if columns_type[index] =="度量":
-                measures.append(columns[index])
-            else:
-                dimensions.append(columns[index])
-
-        # 按照维度分组，并对度量求和  
-        aggregated_df = merged_df.groupby(dimensions)[measures].sum().reset_index()
-        # 查看聚合后的数据  
-        records = aggregated_df.to_records(index=False).tolist()
-
-        return {
-            "rows":records,
-            "row_count":len(records)
-        }
+    def merge_data(db_results, columns=None, columns_type=None, contract=None):
+        from .federation import merge_results
+        return merge_results(db_results, contract)
 
     @staticmethod
     def mk_md_table(headers:list, db_result:list, max_row_return:int):

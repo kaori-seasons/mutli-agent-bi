@@ -1,3 +1,4 @@
+import { authFetch } from '@/utils/app/authFetch';
 import {
   IconClearAll,
   IconInfoCircle,
@@ -118,7 +119,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
           if (stopConversationRef.current === true) {
             try {
               shouldAbort = true;
-              if (signal.aborted && signal.reason) {
+              if (!signal.aborted) {
                 controller.abort();
               }
             } catch (e) {}
@@ -135,233 +136,59 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
         }, 100); // 每 100ms 检查一次
 
         if (shouldAbort) {
+          clearInterval(intervalId);
           return;
         }
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          signal,
-          body,
-        });
-        if (stopConversationRef.current === true) {
-          controller.abort();
+        let answerObj: any;
+        try {
+          const response = await authFetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal,
+            body,
+          });
+          // The query endpoint returns one JSON document; transport chunks are not messages.
+          answerObj = await response.json();
+          if (!response.ok) {
+            toast.error(answerObj.error?.message || response.statusText || '查询失败');
+            return;
+          }
+          if (!answerObj || typeof answerObj !== 'object' || Array.isArray(answerObj)) {
+            throw new Error('Invalid response');
+          }
+        } catch {
+          if (!signal.aborted) toast.error('查询响应未完成，请重试');
+          return;
+        } finally {
+          clearInterval(intervalId);
           homeDispatch({ field: 'loading', value: false });
           homeDispatch({ field: 'messageIsStreaming', value: false });
-          return;
         }
-        // console.log('response', response);
-        if (!response.ok) {
-          homeDispatch({ field: 'loading', value: false });
-          homeDispatch({ field: 'messageIsStreaming', value: false });
-          toast.error(response.statusText);
-          return;
-        }
-        const data = response.body;
-        if (!data) {
-          homeDispatch({ field: 'loading', value: false });
-          homeDispatch({ field: 'messageIsStreaming', value: false });
-          return;
-        }
-        // if (!plugin) {
+        if (signal.aborted || stopConversationRef.current) return;
         if (updatedConversation.messages.length === 1) {
           const { content } = message;
-          const customName =
-            content.length > 30 ? content.substring(0, 30) + '...' : content;
           updatedConversation = {
             ...updatedConversation,
-            name: customName,
+            name: content.length > 30 ? content.substring(0, 30) + '...' : content,
           };
         }
-        homeDispatch({ field: 'loading', value: false });
-        const reader = data.getReader();
-        const decoder = new TextDecoder();
-        let done = false;
-        let isFirst = true;
-        let text = '';
-        // 请求成功时，停止轮询
-        clearInterval(intervalId);
-        if (shouldAbort) {
-          homeDispatch({ field: 'loading', value: false });
-          homeDispatch({ field: 'messageIsStreaming', value: false });
-          return;
+        const chartData = initChartData(answerObj);
+        let showContent = '';
+        if (answerObj.sql) showContent = `原始SQL:\n \`\`\`sql \n${answerObj.sql} \n\`\`\`\n `;
+        if (answerObj.content) showContent += answerObj.content + '\n';
+        if (answerObj.mdData) showContent += answerObj.mdData + '\n';
+        if (answerObj.ontology) {
+          showContent += `\n本体发布：${answerObj.ontology.release_id}；模板版本：${answerObj.ontology.template_version}\n`;
         }
-        while (!done) {
-          const { value, done: doneReading } = await reader.read();
-          done = doneReading;
-          const chunkValue = decoder.decode(value);
-          text += chunkValue;
-
-          let answerObj = JSON.parse(text);
-          if (!answerObj || Object.keys(answerObj).length === 0) {
-            answerObj = { content: '暂无回答' };
-          }
-          console.log('requestId ----> ', answerObj.requestId);
-          let chartData = initChartData(answerObj);
-          let showContent = '';
-          if (answerObj.sql) {
-            showContent = `原始SQL:\n \`\`\`sql \n${answerObj.sql} \n\`\`\`\n `;
-          }
-          if (answerObj.content) {
-            showContent += answerObj.content + '\n';
-          }
-          if (answerObj.mdData) {
-            showContent += answerObj.mdData + '\n';
-          }
-
-          if (isFirst) {
-            isFirst = false;
-            const updatedMessages: Message[] = [
-              ...updatedConversation.messages,
-              {
-                role: 'assistant',
-                content: showContent,
-                sql: answerObj.sql,
-                chartData,
-                chartType: answerObj.chartType,
-                extra: answerObj.extra,
-              },
-            ];
-            updatedConversation = {
-              ...updatedConversation,
-              messages: updatedMessages,
-            };
-            homeDispatch({
-              field: 'selectedConversation',
-              value: updatedConversation,
-            });
-          } else {
-            const updatedMessages: Message[] = updatedConversation.messages.map(
-              (message, index) => {
-                if (index === updatedConversation.messages.length - 1) {
-                  return {
-                    ...message,
-                    content: showContent,
-                    sql: answerObj.sql,
-                    chartData,
-                    chartType: answerObj.chartType,
-                    extra: answerObj.extra,
-                  };
-                }
-                return message;
-              },
-            );
-            updatedConversation = {
-              ...updatedConversation,
-              messages: updatedMessages,
-            };
-            homeDispatch({
-              field: 'selectedConversation',
-              value: updatedConversation,
-            });
-          }
-        }
-        // while (!done) {
-        //   console.log(
-        //     'stopConversationRef.current while',
-        //     stopConversationRef.current,
-        //   );
-
-        //   const abortPromise = new Promise((_, reject) => {
-        //     const abortListener = () => {
-        //       reject(new Error('Request aborted'));
-        //     };
-        //     controller.signal.addEventListener('abort', abortListener);
-        //   });
-
-        //   try {
-        //     const { value, done: doneReading } = (await Promise.race([
-        //       reader.read(),
-        //       abortPromise,
-        //     ])) as any;
-        //     console.log(
-        //       'stopConversationRef.current while222',
-        //       stopConversationRef.current,
-        //     );
-        //     if (stopConversationRef.current === true) {
-        //       controller.abort();
-        //       done = true;
-        //       break;
-        //     }
-
-        //     done = doneReading;
-        //     const chunkValue = decoder.decode(value);
-        //     text += chunkValue;
-        //     console.log(
-        //       'stopConversationRef.current while333',
-        //       stopConversationRef.current,
-        //     );
-        //     let answerObj = JSON.parse(text);
-        //     if (!answerObj || Object.keys(answerObj).length === 0) {
-        //       answerObj = { content: '暂无回答' };
-        //     }
-
-        //     console.log('requestId ----> ', answerObj.requestId);
-        //     let chartData = initChartData(answerObj);
-        //     let showContent = '';
-        //     if (answerObj.sql) {
-        //       showContent = `原始SQL:\n \`\`\`sql \n${answerObj.sql} \n\`\`\`\n `;
-        //     }
-        //     if (answerObj.content) {
-        //       showContent += answerObj.content + '\n';
-        //     }
-        //     if (answerObj.mdData) {
-        //       showContent += answerObj.mdData + '\n';
-        //     }
-
-        //     if (isFirst) {
-        //       isFirst = false;
-        //       const updatedMessages: Message[] = [
-        //         ...updatedConversation.messages,
-        //         {
-        //           role: 'assistant',
-        //           content: showContent,
-        //           sql: answerObj.sql,
-        //           chartData,
-        //           chartType: answerObj.chartType,
-        //         },
-        //       ];
-        //       updatedConversation = {
-        //         ...updatedConversation,
-        //         messages: updatedMessages,
-        //       };
-        //       homeDispatch({
-        //         field: 'selectedConversation',
-        //         value: updatedConversation,
-        //       });
-        //     } else {
-        //       const updatedMessages: Message[] =
-        //         updatedConversation.messages.map((message, index) => {
-        //           if (index === updatedConversation.messages.length - 1) {
-        //             return {
-        //               ...message,
-        //               content: showContent,
-        //               sql: answerObj.sql,
-        //               chartData,
-        //               chartType: answerObj.chartType,
-        //             };
-        //           }
-        //           return message;
-        //         });
-        //       updatedConversation = {
-        //         ...updatedConversation,
-        //         messages: updatedMessages,
-        //       };
-        //       homeDispatch({
-        //         field: 'selectedConversation',
-        //         value: updatedConversation,
-        //       });
-        //     }
-        //   } catch (error: any) {
-        //     if (error.message === 'Request aborted') {
-        //       console.log('请求已中止');
-        //       done = true;
-        //     } else {
-        //       console.error('发生错误:', error);
-        //     }
-        //   }
-        // }
+        const updatedMessages: Message[] = [
+          ...updatedConversation.messages,
+          {
+            role: 'assistant', content: showContent || '暂无回答', sql: answerObj.sql,
+            chartData, chartType: answerObj.chartType, extra: answerObj.extra, ontology: answerObj.ontology,
+          },
+        ];
+        updatedConversation = { ...updatedConversation, messages: updatedMessages };
+        homeDispatch({ field: 'selectedConversation', value: updatedConversation });
         saveConversation(updatedConversation);
         const updatedConversations: Conversation[] = conversations.map(
           (conversation) => {
@@ -377,37 +204,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
         homeDispatch({ field: 'conversations', value: updatedConversations });
         saveConversations(updatedConversations);
         homeDispatch({ field: 'messageIsStreaming', value: false });
-        // } else {
-        //   const { answer } = await response.json();
-        //   const updatedMessages: Message[] = [
-        //     ...updatedConversation.messages,
-        //     { role: 'assistant', content: answer },
-        //   ];
-        //   updatedConversation = {
-        //     ...updatedConversation,
-        //     messages: updatedMessages,
-        //   };
-        //   homeDispatch({
-        //     field: 'selectedConversation',
-        //     value: updateConversation,
-        //   });
-        //   saveConversation(updatedConversation);
-        //   const updatedConversations: Conversation[] = conversations.map(
-        //     (conversation) => {
-        //       if (conversation.id === selectedConversation.id) {
-        //         return updatedConversation;
-        //       }
-        //       return conversation;
-        //     },
-        //   );
-        //   if (updatedConversations.length === 0) {
-        //     updatedConversations.push(updatedConversation);
-        //   }
-        //   homeDispatch({ field: 'conversations', value: updatedConversations });
-        //   saveConversations(updatedConversations);
-        //   homeDispatch({ field: 'loading', value: false });
-        //   homeDispatch({ field: 'messageIsStreaming', value: false });
-        // }
+
       }
     },
     [apiKey, conversations, selectedConversation, stopConversationRef],

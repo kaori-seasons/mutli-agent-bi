@@ -1,4 +1,9 @@
 # mutli-agent-bi
+
+> P1 已落地：Registry v2、双人审核、不可变发布、CAS 回滚及已发布模板查询。默认保持 P0 路径；启用方式和验证证据见 [P1 实施记录](docs/implementation/2026-11-25-p1-registry-and-query-integration.md)。
+
+> 2026-11-25：已接入 P0 身份认证、受控 SQL 执行与审核式多库聚合。升级配置、测试证据和生产边界见 [P0 实施记录](docs/implementation/2026-11-25-p0-security-and-federation.md)。首次升级必须配置 `AUTH_SOURCE_GRANTS`；默认不授予查询权限。
+
 基于多Agent构建的chatbi
 能够帮助企业快速构建自己的会话式BI工具，帮助分析数据而无需复杂的人工。一般情况构建生成式BI，要提高BI响应的准确性，需要对数据提供尽可能详尽的描述，帮助大模型理解数据的业务含义。
 这称之为提示词工程。本方案基于多角色Agent协同技术，简化提示词工程的复杂性，构建高准确度的生成式BI
@@ -13,8 +18,8 @@
 1. 使用自然语言查询数据，并生成图表
 2. 自动生成提示词，并使用多角色Agent协同技术对提示词进行优化，提高查询准确性
 3. 支持自定义SQL模板，解决复杂SQL的生成问题
-4. 支持按角色的数据权限管理，帮助你对数据进行行列粒度的管控
-5. 支持联邦查询功能，可以从多个数据源联合查询，服务端进行合并
+4. 使用 Cognito 可信身份和服务端授权实现数据源级权限；行列范围需由数据库审核视图/账号控制，完整行列策略尚未实现
+5. 支持经过审核契约的多源分区聚合，按指标代数合并；失败或截断不返回完整总计
 6. 支持代理部署模式，数据查询服务和模型推理服务分离部署
 
 ## 应用场景
@@ -46,12 +51,12 @@
 ### 前提条件
 1. 安装依赖
 ```
-pip install -r requirement.txt
+pip install --require-hashes -r requirements.lock
 ```
 2. 项目使用了 Amazon Cognito 用户池进行身份认证登录，请创建Cognito 用户池，并添加访问用户
 
 3. 配置
-进入.env文件，根据注释提供aws ak, sk，部署宿主机器，数据库信息
+根据 `.env_template` 配置身份服务、数据源与显式授权。生产通过平台注入环境变量；本地启动如需读取 `.env`，显式设置 `APP_ENV_FILE=.env`。多源模板、源场景映射及只读账号要求见 P0 实施记录。
 
 ### 生成和优化提示词
 1. 请使用如下命令查看相关命令用法
@@ -105,44 +110,27 @@ docker run --env-file=.env -p 5017:8900  --name textdemo2 text2sql_dev
 docker build -f DockerfileServer -t text2sql_server .
 
 # 启动后端
-docker run -p 5018:80 -v ~/work/chat-bi/logs:/app/logs  --name textdemoserver text2sql_server
-
-
-docker run -p 5018:80 -v ~/work/chat-bi/logs:/app/logs -v ~/work/chat-bi/downloads:/app/downloads --name textdemoserver text2sql_server
+docker run --env-file /secure/runtime.env -p 127.0.0.1:5018:80 \
+  -v /secure/query-exports:/app/var/exports \
+  --name textdemoserver text2sql_server
 ```
 使用浏览器打开ip:5017
 
 ## 补充信息
 
-### 配置本地文件下载
-默认情况下，数据文件会上传到s3,使用s3 文件预签名提供数据文件下载，如果你的目标用户环境无法访问公网希望使用服务器做为下载服务，避免使用公网访问，你可以如下
-创建一个downloads文件夹
-```
-mkdir downloads
-cd downloads
-```
+### 查询结果下载
 
-创建一个简单的文件服务器,例如
-```
-python3 -m http.server 端口号
-
-python3 -m http.server 5023
-```
-
-进入环境变量文件.env，添加环境变量
-```
-DOWNLOAD_HOST={文件服务器的公网或内网IP}:端口
-```
+P0 使用受身份和数据源权限保护的 `/api/downloads/<id>`，链接 10 分钟有效；通过 `QUERY_EXPORT_PATH` 配置私有存储。不要使用公开静态文件服务器暴露查询结果。单机/多节点限制与迁移方式见 [P0 实施记录](docs/implementation/2026-11-25-p0-security-and-federation.md)。
 
 ### 配置模型代理服务器
 如何你的网络环境访问大模型不稳定，则需要使用代理
 1. 修改.env配置文件，修改LLM_PROXY_SERVER参数，该参数是你可以访问大模型地区虚拟的IP及分配给代理服务的端口
-2. 运行如下命令启动代理服务
+2. 主服务与代理均配置相同的至少 32 字符随机 `LLM_PROXY_TOKEN`；通过受保护网络连接。运行如下命令启动本地代理服务
 ```
-python3 mainproxy.py
+APP_ENV_FILE=.env python3 mainproxy.py
 ```
 3.使用更新后的.env配置文件，重新启动chatbi的后的服务
 ```
-python3 main.py
+APP_ENV_FILE=.env python3 main.py
 ```
 

@@ -1,3 +1,4 @@
+import { downloadResult } from '@/utils/app/authFetch';
 import {
   IconCheck,
   IconCopy,
@@ -147,7 +148,12 @@ export const ChatMessage: FC<Props> = memo(
     };
 
 
-    const copyOnClick = () => {
+    const copyOnClick = async () => {
+      if (message.extra) {
+        try { await downloadResult(message.extra); }
+        catch { window.alert('文件已过期或无权下载，请重新查询'); }
+        return;
+      }
       const fileExtension ='.csv';
       const suggestedFileName = `data-file${fileExtension}`;
       const fileName = window.prompt(
@@ -161,7 +167,7 @@ export const ChatMessage: FC<Props> = memo(
       }
       
       var url = "";
-      console.log(message);
+
       if (!message.extra) {
         const startsspl = message.content.indexOf("|", 10);
         const cleanedString = message.content.slice(startsspl+1);
@@ -375,7 +381,8 @@ export const ChatMessage: FC<Props> = memo(
                 {findIndex > 0 &&
                     messages[findIndex - 1] &&
                     messages[findIndex - 1].extra && (
-                    <a href={messages[findIndex - 1].extra}>下载文件</a>  
+                    <button onClick={() => downloadResult(messages[findIndex - 1].extra!)
+                      .catch(() => window.alert('文件已过期或无权下载'))}>下载文件</button>
                 )}
                 </div>
                 <div>

@@ -1,413 +1,282 @@
-
-import boto3
-import os
+"""Compatible ChatBI response surface over authenticated, bounded query execution."""
+import copy
 import json
-import re
-
-from uuid import uuid4
-from . import llm
-from . import conf
-from . import aws
-from . import prompt
-from . import sql
-from .api_helpler import Helper
-
-
 import logging
-from logging.handlers import RotatingFileHandler
+import os
+import time
+
+from . import llm, conf, aws, prompt, sql
+from .api_helpler import Helper
+from .errors import ServiceError
+from .execution import QueryBudget, bounded_int
+from .federation import validate_contract, validate_merge_query
+from .query_policy import PreparedQuery, bind_template
 
 logger = logging.getLogger(__name__)
-
-# 设置日志级别
-logger.setLevel(logging.INFO)
-# 创建一个handler，用于写入日志文件
-handler = RotatingFileHandler('logs/chatbi.log', maxBytes=100000, backupCount=10)
-logger.addHandler(handler)
+meta = {}
 
 
-# 创建一个handler，用于将日志输出到控制台
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-logger.addHandler(console_handler)
-
-# 定义日志格式
-formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
-handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
-
-meta = dict()
-
-def init():
-    logger.info("正在加载和分析模板SQL")
-    _load_template_questions()
-
-def get_result(msg:list,trace_id:str, user_id:str='', mode_type: str ='normal'):
-    logger.info(f"user:{user_id}===>trace id:{trace_id}===>begin to query data")
-
-    bedrock = aws.get('bedrock-runtime')
-    bedrock_result = answer_template_sql(bedrock, msg, trace_id)
-    if "error" in bedrock_result:
-
-        prompt_content = prompt.get("PROMPT_FILE_NAME")
-        is_hard = True
-        bedrock_result =  answer(bedrock, msg, prompt_content, trace_id, is_hard)
-
-    if "error" in bedrock_result:
-        logger.info(f"user:{user_id}===>trace id:{trace_id}===>failed to query data")
-        return  {
-            "content":bedrock_result["error"],
-            "mdData":"",
-            "chartData":dict(),
-            "sql":"",
-            "chartType":""
-        }
-
-    fmt_sql = sql.format_md(bedrock_result['bedrockSQL'])
-    logger.info(f"user:{user_id}===>trace id:{trace_id}===>get sql {fmt_sql}")
-    last_item = msg[-1]
-    raw_content = last_item['content']
-
-    max_row_return = int(os.getenv("MAX_ROW_COUNT_RETURN", "50"))
-
-    db_infos = conf.get_mysql_conf_by_question(raw_content)
-    
-
-    columns = bedrock_result['bedrockColumn']
-    column_types = bedrock_result['column_type']
-    if len(db_infos) == 1:
-        db_info = db_infos[0]
-        db_results =Helper.query_db(db_info, fmt_sql, user_id, trace_id)
-    else:
-        db_results= Helper.query_many_db(db_infos, fmt_sql)
-        db_results = Helper.merge_data(db_results, columns, column_types)
-
-    if "error" in db_results:
-        db_results = retry_when_sql_error(user_id, trace_id,msg,fmt_sql, db_results, db_infos, bedrock)
-        fmt_sql = db_results['finalSQL']
-
-
-    if 'cn_column' in bedrock_result:
-        cn_columns = bedrock_result['cn_column']
-    else:
-        cn_columns = columns
-    
-    md_table = Helper.mk_md_table(cn_columns, db_results, max_row_return)
-
-    chart_data = Helper.mk_chart_data(cn_columns,column_types, db_results, max_row_return)
-
-    chartType ="BarChartPic" if bedrock_result['chart_type'].find("错误") >=0 else bedrock_result['chart_type']
-
-    result = {
-        "mdData":md_table,
-        "chartData":chart_data,
-        "sql":fmt_sql,
-        "chartType":chartType,
-    }
-
-    if "clarify" in bedrock_result:
-        result['content'] = bedrock_result['clarify']
-        
-
-    total_row_count = db_results["row_count"]
-    if total_row_count >= max_row_return:
-        # 数据量太大，则保存到s3，生成下载链接让客户后台下载
-        bucket_name = os.getenv("BUCKET_NAME")
-        download_host =os.getenv("DOWNLOAD_HOST")
-        if download_host:
-            load_url =  aws.save_2_local(cn_columns, db_results, f"{user_id}_{trace_id}")
-        else:
-            load_url =  aws.upload_csv_to_s3(cn_columns, db_results, bucket_name, f"{user_id}_{trace_id}")
-
-        result['extra'] = load_url
-        many_msg = f"\n数据量较大，默认只显示了 {max_row_return}, 请点击下载查看全部数据。建议使用汇总数据而非明细数据分析"
-        if 'content' in result:
-            result['content'] =result['content'] +many_msg
-        else:
-             result['content'] = many_msg
-
-    else:
-        result['extra'] = ""
-        
-    logger.info(result)
-    logger.info(f"user:{user_id}===>trace id:{trace_id}===>success to query data")
-    return result
-
-def answer(
-        bedrock,
-        msg:list, 
-        promptConfig:dict,
-        trace_id:str,
-        is_hard_mode:bool):
-    # 对问题进行提示词工程并查询bedrock
-    last_item = msg[-1]
-    raw_content = last_item['content']
-    scenario_str = Helper.build_select_scenario_msg(raw_content, promptConfig)
-
-    rag_str = Helper.get_rag_str(last_item['content'])
-
-    questions  = list()
-    # questions.extend(msg)
-    questions.append({
-        "role":"user",
-        "content": scenario_str
-    })
-    logger.info("begin select scenario")
-    scenario = llm.query(questions,bedrock_client=bedrock)
-    
-
-    if scenario not in promptConfig:
-        # 如果有默认场景就尝试使用默认场景
-        if 'DefaulteScenario' in promptConfig["Overall"]:
-            error = f"{trace_id}===============>没有找到合适的场景: {scenario}，尝试使用默认场景查询{promptConfig['Overall']['DefaulteScenario']}"
-            logger.info(error)
-            scenario =promptConfig['Overall']['DefaulteScenario']
-        else:
-            error = f"{trace_id}===============>failed to find scenario in prompt config file: {scenario}"
-            logger.info(error)
-            return Helper.bad_response(error=error)
-        
-
-    logger.info(f"{trace_id}===============>{scenario} is selected")
-               
-
-    question_str = Helper.build_question_msg(raw_content,scenario,promptConfig,is_hard_mode, rag_str)
-    questions  = Helper.mk_request_with_history(question_str, msg)
-
-
-    result = llm.query(questions,bedrock_client=bedrock)
-    result = llm.format_bedrock_result(result)
-    
+def init(load_templates=True):
+    if load_templates:
+        _load_template_questions()
     try:
-        parsed = json.loads(result)
-    except json.JSONDecodeError:
-        error = f"{trace_id}===================> 返回的结果不是json\n{result}"
-        logger.info(error)
-        return Helper.bad_response(error=error)
-
-    if  "finalSQL" not in parsed and  (parsed['finalSQL'] =="" or parsed['finalSQL'].find("ERROR: You can only read data.") >= 0):
-
-        error = f"{trace_id}===================> 返回的结果没有生成SQL"
-        logger.info(error)
-        return Helper.bad_response(error=error)
-
-    if 'columnList' in parsed and isinstance(parsed["columnList"], list):
-        columns = list()
-        for item in parsed["columnList"]:
-            parts = item.split(" AS ")
-            if len(parts) > 1:
-                columns.append(parts[1])
-            else:
-                columns.append(item)
-
-        parsed["columnList"] = columns
-    
-
-    result_j = {
-      "bedrockSQL": parsed['finalSQL'],
-      "queryTableName": scenario,
-      "bedrockColumn": columns,
-      "cn_column":parsed['columnCNList'],
-      "column_type": parsed['columnType'],
-      "chart_type": parsed['chartType']
-    }
-    if is_hard_mode:
-        result_j["clarify"] =parsed["clarify"]
-
-    return result_j
+        from ontology.shadow import configure
+        configure()
+    except Exception:
+        pass
 
 
-def answer_template_sql(
-        bedrock,
-        msg:list, 
-        trace_id:str):
-
-    # 对问题进行提示词工程并查询bedrock
-    last_item = msg[-1]
-    raw_content = last_item['content']
-
-
-    # 开始查询问题对应的模板问题
-    question_prompt = prompt.build_template_question_meta_prompt(raw_content)
-
-    questions=[{
-        "role":"user",
-        "content": question_prompt
-    }]
-
-
-    result = llm.query(questions,bedrock_client=bedrock)
-
+def _ontology_compare(*args, **kwargs):
     try:
-        parsed = json.loads(result)
-    except json.JSONDecodeError as ex:
-        error  = f"{trace_id}===================> 没有找到模板问题,原因是:\n{result}\n{ex}"
-        logger.info(error)
-        # 如果解析失败，返回False
-        return Helper.bad_response(error)
+        from ontology.shadow import record_comparison
+        return record_comparison(*args, **kwargs)
+    except Exception:
+        return False
 
 
-    template_question =  _find_template(raw_content, parsed)
-
-    if not template_question:
-        error  = f"{trace_id}===================> 没有找到模板问题:\n{parsed}"
-        logger.info(error)
-        # 如果解析失败，返回False
-        return Helper.bad_response(error)
-
-    logger.info(f"{trace_id}===================> 找到模板问题\n{parsed}")
-    params = parsed["conditions"].values()
-    new_params = list()
-    for param in params:
-        if isinstance(param, list):
-            new_p = ",".join(param)
-            new_params.append(new_p)
-        else:
-            new_params.append(param)
-
-
-    # 获取模板问题对应的模板SQL
-    template_sql = prompt.template_sql(template_question)
-    if template_sql == "":
-        error  = f"{trace_id}===================> 模板SQL为空\n{template_question}"
-        logger.info(error)
-        # 如果解析失败，返回False
-        return Helper.bad_response(error)
-    
-    fmt_sql = template_sql.format(*new_params)
-
-    sql_column_prompt = prompt.template_sql_columns(fmt_sql, raw_content)
-
-    questions  = list()
-    # questions.extend(msg)
-    questions.append({
-        "role":"user",
-        "content": sql_column_prompt
-    })
-    result = llm.query(questions,bedrock_client=bedrock)
+def _object(raw):
     try:
-        parsed = json.loads(result)
-    except json.JSONDecodeError:
-        error  = f"{trace_id}===================> 没有找到模板sql列信息\n{result}"
-        logger.info(error)
-        return Helper.bad_response(error)
+        value = json.loads(raw)
+        if not isinstance(value, dict):
+            raise ValueError()
+        return value
+    except (ValueError, TypeError):
+        return {}
 
-    columns = parsed["columns"]
-    columns_ype = parsed["columns_type"]
-    info  = f"{trace_id}===================> 返回的模板SQL为:\n{fmt_sql}"
-    logger.info(info)
-    result_j = {
-      "bedrockSQL": fmt_sql,
-      "queryTableName": "template",
-      "bedrockColumn": columns,
-      "column_type": columns_ype,
-      "chart_type": "BarChart"
-    }
-    return result_j
 
-def retry_when_sql_error(user_id:str, trace_id:str, msg:list,fmtsql:str, raw_db_results:dict, db_infos:list, bedrock_client):
-    fix_query = prompt.template_fix_query_error(fmtsql, raw_db_results["error"])
-    questions = Helper.mk_request_with_history(fix_query, msg)
-    result = llm.query(questions,bedrock_client=bedrock_client)
-    result = llm.format_bedrock_result(result)
+def _columns(parsed, names_key, types_key):
+    names, types = parsed.get(names_key), parsed.get(types_key)
+    if (not isinstance(names, list) or not names or len(names) > 256
+            or any(not isinstance(n, str) or not n for n in names)
+            or not isinstance(types, list) or len(names) != len(types)
+            or any(not isinstance(t, str) or t not in {"维度", "度量"} for t in types)):
+        raise ServiceError("INVALID_MODEL_OUTPUT", "模型返回的列说明无效", 502)
+    return names, types
+
+
+def _scoped_prompt(config, source_id):
+    if len(conf.mysql_info) == 1:
+        return config
     try:
-        parsed = json.loads(result)
-    except json.JSONDecodeError:
-        error = f"{trace_id}===================> 返回的结果不是json\n{result}"
-        logger.info(error)
+        mapping = json.loads(os.getenv("SOURCE_SCENARIOS", "{}"))
+        names = mapping[source_id]
+        if not isinstance(names, list) or not names or any(n not in config for n in names):
+            raise ValueError()
+    except (KeyError, ValueError, TypeError):
+        raise ServiceError("SCENARIO_CONFIGURATION", "请配置该数据源的场景范围", 503) from None
+    scoped = {k: copy.deepcopy(config[k]) for k in
+              ("Examples", "ChartPrompt", "HardPrompt", "DefaultPrompt") if k in config}
+    scoped.update({name: copy.deepcopy(config[name]) for name in names})
+    scoped["Overall"] = copy.deepcopy(config.get("Overall", {}))
+    scoped["Overall"]["AllScenariosPrompt"] = json.dumps(names, ensure_ascii=False)
+    if scoped["Overall"].get("DefaulteScenario") not in names:
+        scoped["Overall"].pop("DefaulteScenario", None)
+    return scoped
 
-    if  "finalSQL" not in parsed and  (parsed['finalSQL'] =="" or parsed['finalSQL'].find("ERROR: You can only read data.") >= 0):
-        error = f"{trace_id}===================> 返回的结果没有生成SQL"
-        logger.error(error)
-        return {
-            "row_count":0,
-            "error":error
-        }
+
+def get_result(msg, trace_id, user_id="", mode_type="normal", *, principal=None, source_ids=None, ontology_options=None):
+    if principal is None:
+        raise ServiceError("AUTH_REQUIRED", "查询需要可信身份", 401)
+    infos = conf.get_mysql_conf_by_question(msg[-1]["content"], principal.sources, source_ids)
+    ids = [info["source_id"] for info in infos]
+    budget = QueryBudget()
+    templates = conf.get_sql_templates()
+    scope = {name for name, entry in templates.items()
+             if (entry.get("source_ids") is not None and set(ids) <= set(entry["source_ids"]))
+             or (entry.get("source_ids") is None and len(conf.mysql_info) == 1)}
+    from ontology.runtime import prepare, guard, evidence
+    ontology_context = prepare(principal, ids, msg[-1]["content"], conf.mysql_info, ontology_options)
+    bedrock = None
+    if ontology_context:
+        generated = ontology_context["generated"]
     else:
-        fmt_sql = parsed["finalSQL"]
-        db_info = db_infos[0]
-        db_results =Helper.query_db(db_info, fmt_sql, user_id, trace_id)
-        db_results['finalSQL'] = fmt_sql
-        return db_results
+        _load_template_questions()
+        bedrock = aws.get("bedrock-runtime")
+        generated = answer_template_sql(bedrock, msg, trace_id, template_scope=scope)
+    if "error" in generated:
+        if len(infos) > 1:
+            raise ServiceError("MERGE_CONTRACT_REQUIRED", "多库查询须匹配具有审核聚合契约的模板", 422)
+        config = _scoped_prompt(prompt.get("PROMPT_FILE_NAME"), ids[0])
+        generated = answer(bedrock, msg, config, trace_id, True)
+    if "error" in generated:
+        raise ServiceError("UNANSWERABLE", "无法根据当前授权场景生成查询，请补充问题范围", 422)
+
+    prepared = generated.get("prepared_query") or PreparedQuery(sql.format_md(generated["bedrockSQL"]))
+    merge = generated.get("merge_contract")
+    guard(ontology_context)
+    if len(infos) > 1:
+        validate_contract(merge, ids)
+        for info in infos:
+            validate_merge_query(prepared, merge, info["db"])
+        results = Helper.query_many_db(infos, prepared, budget=budget)
+        result = Helper.merge_data(results, contract=merge)
+        columns = result["columns"]
+        types = ["维度"] * len(merge["dimensions"]) + ["度量"] * len(merge["measures"])
+    else:
+        result = Helper.query_db(infos[0], prepared, principal.subject, trace_id, budget=budget)
+        # Template values must not be reinterpreted by a repair model; multi-source plans
+        # cannot be repaired by silently rerunning only the first source.
+        if result.get("status") == "failed" and result.get("retryable") and not generated.get("prepared_query"):
+            result = retry_when_sql_error(principal.subject, trace_id, msg, prepared.sql,
+                                         result, infos, bedrock, budget=budget)
+            if result.get("finalSQL"):
+                prepared = PreparedQuery(result["finalSQL"])
+        if result.get("status") != "success":
+            raise ServiceError("SOURCE_QUERY_FAILED", "数据库查询未完成，请稍后重试", 502)
+        columns = result["columns"]  # Actual cursor metadata is authoritative.
+        types = generated["column_type"] if len(generated["column_type"]) == len(columns) else ["维度"] * len(columns)
+
+    if ontology_context:
+        guard(ontology_context)
+        expected_columns = (list(merge["dimensions"]) + list(merge["measures"]) if len(infos) > 1
+                            else ontology_context["template"]["attributes"]["outputs"])
+        if columns != expected_columns:
+            raise ServiceError("STALE_BINDING", "实际结果列与发布模板不一致", 422)
+    limit = bounded_int("MAX_ROW_COUNT_RETURN", 50, 1, 10000)
+    labels = generated.get("cn_column")
+    if (len(infos) > 1 or not isinstance(labels, list) or len(labels) != len(columns)
+            or any(not isinstance(label, str) for label in labels)):
+        labels = columns
+    content = generated.get("clarify", "")
+    content = content if isinstance(content, str) else ""
+    chart_type = generated.get("chart_type", "BarChartPic")
+    charts = {"barchart": "BarChartPic", "linechart": "LineChartPic", "piechart": "PieChartPic",
+              "barchartpic": "BarChartPic", "linechartpic": "LineChartPic", "piechartpic": "PieChartPic"}
+    chart_type = charts.get(chart_type.lower(), "BarChartPic") if isinstance(chart_type, str) else "BarChartPic"
+    response = {"status": "success", "content": content,
+                "mdData": Helper.mk_md_table(labels, result, limit),
+                "chartData": Helper.mk_chart_data(labels, types, result, limit),
+                "sql": prepared.sql, "chartType": chart_type,
+                "extra": "", "truncated": result.get("truncated", False),
+                "sources": result.get("sources", [{"source_id": ids[0], "status": "success"}])}
+    if result.get("truncated"):
+        response["content"] += "\n结果达到执行上限，仅展示截断结果；请缩小范围后获取完整数据。"
+    elif result["row_count"] > limit:
+        from .exports import save_export
+        try:
+            release = ({"namespace": ontology_context["namespace"], "release_id": ontology_context["release_id"]}
+                       if ontology_context else None)
+            response["extra"] = save_export(principal, ids, columns, result["rows"], release=release)
+            response["content"] += f"\n当前展示 {limit} 行，可下载本次完整结果（10 分钟内有效）。"
+        except Exception as error:
+            logger.warning("export_failed trace=%s type=%s", trace_id, type(error).__name__)
+            response["content"] += "\n查询成功，导出暂时不可用。"
+    logger.info("query_complete trace=%s sources=%d rows=%d sql_calls=%d",
+                trace_id, len(ids), result["row_count"], budget.calls)
+    if ontology_context:
+        guard(ontology_context)
+        response["ontology"] = evidence(ontology_context)
+    return response
+
+
+def answer(bedrock, msg, promptConfig, trace_id, is_hard_mode):
+    raw = msg[-1]["content"]
+    questions = [{"role": "user", "content": Helper.build_select_scenario_msg(raw, promptConfig)}]
+    start = time.monotonic()
+    scenario = llm.query(questions, bedrock_client=bedrock)
+    raw_scenario = scenario
+    elapsed = (time.monotonic() - start) * 1000
+    if scenario not in promptConfig or scenario == "Overall":
+        scenario = promptConfig.get("Overall", {}).get("DefaulteScenario")
+        if not scenario or scenario not in promptConfig:
+            _ontology_compare("scenario", raw, trace_id, selected=raw_scenario, status="no_match", llm_elapsed_ms=elapsed)
+            return Helper.bad_response("没有找到合适的场景")
+    _ontology_compare("scenario", raw, trace_id, selected=raw_scenario, final_selection=scenario,
+                      status="matched" if scenario == raw_scenario else "default_fallback", llm_elapsed_ms=elapsed)
+    question = Helper.build_question_msg(raw, scenario, promptConfig, is_hard_mode, Helper.get_rag_str(raw))
+    parsed = _object(llm.format_bedrock_result(llm.query(Helper.mk_request_with_history(question, msg), bedrock_client=bedrock)))
+    if not isinstance(parsed.get("finalSQL"), str) or not parsed["finalSQL"].strip():
+        return Helper.bad_response("模型未生成有效 SQL")
+    try:
+        columns, types = _columns(parsed, "columnList", "columnType")
+    except ServiceError:
+        return Helper.bad_response("模型列说明无效")
+    columns = [item.split(" AS ")[-1] for item in columns]
+    return {"bedrockSQL": parsed["finalSQL"], "queryTableName": scenario,
+            "bedrockColumn": columns, "cn_column": parsed.get("columnCNList"),
+            "column_type": types, "chart_type": parsed.get("chartType", "BarChart"),
+            **({"clarify": parsed.get("clarify", "")} if is_hard_mode else {})}
+
+
+def answer_template_sql(bedrock, msg, trace_id, template_scope=None):
+    raw = msg[-1]["content"]
+    questions = [{"role": "user", "content": prompt.build_template_question_meta_prompt(raw)}]
+    start = time.monotonic()
+    parsed = _object(llm.query(questions, bedrock_client=bedrock))
+    if not parsed:
+        _ontology_compare("template", raw, trace_id, status="invalid_legacy_json",
+                          llm_elapsed_ms=(time.monotonic() - start) * 1000)
+        return Helper.bad_response("模板匹配响应无效")
+    selected = _find_template(raw, parsed, template_scope)
+    _ontology_compare("template", raw, trace_id, selected=selected, final_selection=selected,
+                      status="matched" if selected else "no_match",
+                      llm_elapsed_ms=(time.monotonic() - start) * 1000)
+    if not selected:
+        return Helper.bad_response("没有找到匹配模板")
+    entry = conf.get_sql_templates().get(selected, {})
+    conditions = parsed["conditions"]
+    keys = entry.get("condition_keys")
+    if keys is None:
+        if len(conditions) > 1:
+            raise ServiceError("TEMPLATE_CONFIGURATION", "多参数模板须显式配置 condition_keys 顺序", 503)
+        keys = list(conditions)
+    if not isinstance(keys, list) or len(keys) != len(set(keys)) or set(keys) != set(conditions):
+        raise ServiceError("INVALID_MODEL_OUTPUT", "模板参数与审核定义不一致", 502)
+    prepared = bind_template(prompt.template_sql(selected), [conditions[key] for key in keys])
+    descriptions = _object(llm.query([{"role": "user",
+                                      "content": prompt.template_sql_columns(prepared.sql, raw)}], bedrock_client=bedrock))
+    columns, types = _columns(descriptions, "columns", "columns_type")
+    return {"bedrockSQL": prepared.sql, "prepared_query": prepared,
+            "merge_contract": entry.get("merge"), "queryTableName": "template",
+            "bedrockColumn": columns, "column_type": types, "chart_type": "BarChart"}
+
+
+def retry_when_sql_error(user_id, trace_id, msg, fmtsql, raw_db_results, db_infos, bedrock_client, budget=None):
+    if len(db_infos) != 1:
+        raise ServiceError("PARTIAL_RESULT", "跨库失败不能降级为单库重试", 502)
+    fix = prompt.template_fix_query_error(fmtsql, "查询语法或目录绑定失败，请核对授权场景。")
+    parsed = _object(llm.format_bedrock_result(llm.query(Helper.mk_request_with_history(fix, msg), bedrock_client=bedrock_client)))
+    if not isinstance(parsed.get("finalSQL"), str) or not parsed["finalSQL"].strip():
+        raise ServiceError("INVALID_MODEL_OUTPUT", "SQL 修复未返回有效查询", 502)
+    final_sql = sql.format_md(parsed["finalSQL"])
+    result = Helper.query_db(db_infos[0], PreparedQuery(final_sql), user_id, trace_id, budget=budget)
+    return dict(result, finalSQL=final_sql)
 
 
 def _load_template_questions():
-    if not meta:
-        p = prompt.build_template_options_question()
-        msg = [{
-            "role":"user",
-            "content":p
-        }]
-    
-        try:
-            bedrock_client = aws.get('bedrock-runtime')
-            print("done")
-            result_str = llm.query(msg, bedrock_client)
-            parsed = json.loads(result_str)
-        except Exception as ex:
-            logger.error(f"分析模板问题出现错误:{ex}")
-            return None
-
-        logger.info(parsed)
-        # templates = conf.get_sql_templates()
-        # for key in parsed:
-        #     params1 = templates[key]['params']
-        #     item = parsed[key]
-        #     conditions = item["conditions"]
-
-        for key in parsed:
-            meta[key] = parsed[key]
-            meta[key]['querys'].sort()
-
-        
-
-    
-
-def _compare_condition(con1, con2)->bool:
-    for key in con1:
-        if key not in con2:
-            return False
-    return True
+    if meta or not conf.get_sql_templates():
+        return
+    try:
+        raw = llm.query([{"role": "user", "content": prompt.build_template_options_question()}],
+                        aws.get("bedrock-runtime"))
+        parsed = _object(raw)
+        for key, value in parsed.items():
+            if key in conf.get_sql_templates() and _valid_selection(value):
+                meta[key] = value
+                meta[key]["querys"].sort()
+    except Exception as error:
+        logger.warning("template_metadata_failed type=%s", type(error).__name__)
 
 
-def _find_template(raw_ques:str, user_question_meta):
-    if raw_ques in meta:
-        return raw_ques
+def _valid_selection(value):
+    return (isinstance(value, dict) and isinstance(value.get("conditions"), dict)
+            and isinstance(value.get("querys"), list) and bool(value["querys"])
+            and all(isinstance(x, str) for x in value["querys"])
+            and all(isinstance(k, str) for k in value["conditions"]))
 
-    querys = user_question_meta["querys"]
-    conditions = user_question_meta["conditions"]
 
-    for key in meta:
-        tp = meta[key]
-        if len(conditions)!=len(tp['conditions']):
+def _compare_condition(con1, con2):
+    return set(con1) == set(con2)
+
+
+def _find_template(raw_ques, user_question_meta, scope=None):
+    if not _valid_selection(user_question_meta):
+        return ""
+    for key, template in meta.items():
+        if scope is not None and key not in scope:
             continue
-
-        if len(querys)!=len(tp['querys']):
-            continue
-
-        if not _compare_condition(conditions, tp['conditions']):
-            logger.info("查询条件不同")
-            continue
-        
-        
-        querys.sort()
-        if querys != tp['querys']:
-            logger.info("查询内容不同")
-            continue
-
-        return key
-
+        if (_valid_selection(template)
+                and _compare_condition(template["conditions"], user_question_meta["conditions"])
+                and sorted(template["querys"]) == sorted(user_question_meta["querys"])):
+            return key
     return ""
-
-        
-
-
-
-
-
-
-
-    
-
-    
-
-                                             

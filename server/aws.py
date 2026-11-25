@@ -5,14 +5,15 @@ from datetime import datetime, timedelta
 import os
 import threading
 import time
+from botocore.config import Config
 
 
 def get(service_name:str, force_llm:bool=False):
+    client_config = Config(connect_timeout=5, read_timeout=30, retries={"max_attempts": 0})
 
     if service_name == "bedrock-runtime" and not force_llm:
         proxy_server =  os.getenv("LLM_PROXY_SERVER", "")
         if proxy_server:
-            print(f"begin use proxy server:{proxy_server}")
             return {
                     'proxy_server':proxy_server
                 } 
@@ -21,7 +22,7 @@ def get(service_name:str, force_llm:bool=False):
     if service_name == 's3' and is_dev:
         client = boto3.client(
             service_name,
-            region_name = os.getenv('S3_REGION')
+            region_name = os.getenv('S3_REGION'), config=client_config
         )
         return client 
 
@@ -30,12 +31,12 @@ def get(service_name:str, force_llm:bool=False):
             service_name,
             region_name = os.getenv('DEFAULT_REGION'),
             aws_access_key_id=os.getenv('ACCESS_KEY'),
-            aws_secret_access_key=os.getenv('SECRET_ACCESS_KEY')
+            aws_secret_access_key=os.getenv('SECRET_ACCESS_KEY'), config=client_config
        )
 
     return boto3.client(
             service_name,
-            region_name = os.getenv('DEFAULT_REGION')
+            region_name = os.getenv('DEFAULT_REGION'), config=client_config
         )
 
 
@@ -60,11 +61,14 @@ def upload_file_to_s3(file_name, bucket_name, object_name=None):
     try:  
         # 上传文件  
         s3_client.upload_file(file_name, bucket_name, object_name)  
-        print(f"文件 {file_name} 已成功上传到S3桶 {bucket_name} 中，对象名称为 {object_name}")  
-    except FileNotFoundError:  
-        print(f"未找到文件 {file_name}")  
-    except Exception as e:  
+        print(f"文件 {file_name} 已成功上传到S3桶 {bucket_name} 中，对象名称为 {object_name}")
+        return True
+    except FileNotFoundError:
+        print(f"未找到文件 {file_name}")
+        return False
+    except Exception as e:
         print(f"上传文件时出错：{e}")
+        return False
 
 
 def upload_csv_to_s3(headers, db_results, bucket_name, file_name):

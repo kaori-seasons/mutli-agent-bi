@@ -1,0 +1,34 @@
+{
+  "adapter": "v1-to-v2/1",
+  "source_revision": "66583fbb9fcbb8964493476f7dc4e9ecd4aa78036cef0c22a32ef84455941c61",
+  "blockers": [
+    {
+      "id": "metric:73099b7ce4f67ec3c2494824f1a43f8e",
+      "blockers": [
+        "grain_unit_time_and_business_review_required"
+      ]
+    },
+    {
+      "id": "metric:4460459bcc6301c2386de15408daf53d",
+      "blockers": [
+        "grain_unit_time_and_business_review_required"
+      ]
+    },
+    {
+      "id": "metric:5a714cff882fc24d5bd87ae9cd2e3873",
+      "blockers": [
+        "grain_unit_time_and_business_review_required"
+      ]
+    }
+  ],
+  "warnings": [
+    "[demo:orders_default.xlsx] 关联原文保留，未生成不可验证的结构化关系"
+  ],
+  "source_map": {
+    "demo": "demo"
+  },
+  "counts": {
+    "original_entities": 21,
+    "migrated_entities": 21
+  }
+}
