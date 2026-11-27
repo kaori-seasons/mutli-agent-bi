@@ -1,0 +1,25 @@
+{
+  "demo": {
+    "sample_rows": 200,
+    "tables": {
+      "orders": {
+        "columns": ["id", "customer_id", "amount", "email"],
+        "profile_columns": ["id", "customer_id", "amount", "email"],
+        "sensitive_columns": ["email"]
+      },
+      "customers": {
+        "columns": ["id"],
+        "profile_columns": ["id"],
+        "sensitive_columns": []
+      }
+    },
+    "relations": [
+      {
+        "left_table": "orders",
+        "left_keys": ["customer_id"],
+        "right_table": "customers",
+        "right_keys": ["id"]
+      }
+    ]
+  }
+}

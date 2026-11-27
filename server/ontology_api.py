@@ -85,6 +85,9 @@ def review(identity):
     admin()
     data = body(('expected_digest', 'decision', 'reason'))
     changeset(identity)
+    if data['decision'] == 'approved':
+        from ontology.discovery.workflow import check_current_review
+        check_current_review(Registry(), identity, g.principal, sources())
     return Registry().review(identity, g.principal, data['expected_digest'], data['decision'], data['reason'])
 
 
@@ -132,3 +135,52 @@ def knowledge_search():
 @blueprint.get('/v1/knowledge/entities/<path:identity>')
 def knowledge_entity(identity):
     return detail(Registry(), g.principal, identity, request.args.get('release_id'))
+
+
+@blueprint.get('/v1/ontology/discovery/config')
+def discovery_config():
+    import os
+    import json
+    from ontology.discovery.policy import load_policy
+    admin()
+    enabled = os.getenv('ONTOLOGY_DISCOVERY_ENABLED', 'false') == 'true'
+    result = {'enabled': enabled, 'subject': g.principal.subject, 'sources': []}
+    if enabled:
+        try:
+            configured = json.loads(os.getenv('ONTOLOGY_DISCOVERY_POLICY', '{}'))
+            if not isinstance(configured, dict):
+                raise ValueError()
+        except ValueError:
+            raise ServiceError('DISCOVERY_CONFIGURATION', '采集策略格式无效', 503) from None
+        for source in sorted(set(configured) & g.principal.sources & set(sources())):
+            policy = load_policy(source)
+            result['sources'].append({'source_id': source, 'tables': list(policy['tables']), 'sample_rows': policy['sample_rows']})
+    return result
+
+
+@blueprint.route('/v1/ontology/discovery/runs', methods=['GET', 'POST'])
+def discovery_runs():
+    from ontology.discovery import workflow
+    admin()
+    registry = Registry()
+    if request.method == 'GET':
+        return workflow.list_runs(registry, namespace(), g.principal)
+    data = body(('source_id', 'idempotency_key'), ('tables', 'upstream'))
+    if not isinstance(data['source_id'], str) or not data['source_id']:
+        raise invalid('数据源标识无效')
+    return workflow.run(registry, namespace(), g.principal, sources(), **data)
+
+
+@blueprint.get('/v1/ontology/discovery/runs/<identity>')
+def discovery_run(identity):
+    from ontology.discovery.workflow import get_run
+    admin()
+    return get_run(Registry(), namespace(), identity, g.principal)
+
+
+@blueprint.post('/v1/ontology/discovery/runs/<identity>/prepare-review')
+def discovery_prepare(identity):
+    from ontology.discovery.workflow import prepare_review
+    admin()
+    data = body(('expected_digest', 'entity_ids', 'edits', 'expected_active', 'expected_generation', 'reason'))
+    return prepare_review(Registry(), namespace(), identity, g.principal, sources(), **data), 201

@@ -122,6 +122,13 @@ class Registry:
             CREATE TABLE IF NOT EXISTS audit (
                 seq INTEGER PRIMARY KEY AUTOINCREMENT, namespace TEXT, actor TEXT, action TEXT, object_id TEXT,
                 details TEXT, created REAL);
+            CREATE TABLE IF NOT EXISTS discovery_runs (
+                id TEXT PRIMARY KEY, namespace TEXT, source_id TEXT, actor TEXT, idempotency_key TEXT,
+                request_digest TEXT, state TEXT, payload TEXT, digest TEXT, error_code TEXT,
+                created REAL, updated REAL, lease_until REAL,
+                UNIQUE(namespace,actor,idempotency_key));
+            CREATE TABLE IF NOT EXISTS discovery_review_links (
+                changeset_id TEXT PRIMARY KEY, run_id TEXT, artifact_digest TEXT, expires REAL);
             ''')
             if db.execute('SELECT version FROM metadata').fetchone()[0] != 2:
                 fail('REGISTRY_CONFIGURATION', '注册仓库格式不兼容', 503)
@@ -179,7 +186,7 @@ class Registry:
         validate(document)
         return document, index
 
-    def propose(self, document, principal, expected_active, expected_generation, infos):
+    def propose(self, document, principal, expected_active, expected_generation, infos, *, discovery_link=None):
         authorized(principal, [], admin=True)
         document = copy.deepcopy(validate(document))
         validate_executable(document, infos)
@@ -214,6 +221,9 @@ class Registry:
             db.execute('INSERT INTO changesets VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                        (identity, namespace, principal.subject, expected_active, expected_generation, canonical(document),
                         hashed, canonical(sorted(scope)), canonical(diff), 'validated', time.time()))
+            if discovery_link is not None:
+                from .discovery.workflow import attach_review
+                attach_review(db, identity, discovery_link, principal)
             self.audit_in(db, namespace, principal.subject, 'proposed', identity, {'digest': hashed, 'diff': diff})
         return self.changeset(identity, principal)
 
@@ -242,6 +252,9 @@ class Registry:
             raise invalid('审核须填写决定与理由')
         with self.connection(write=True) as db:
             row = self.change_in(db, identity, principal)
+            if decision == 'approved':
+                from .discovery.workflow import check_review_link
+                check_review_link(db, identity)
             if row['author'] == principal.subject:
                 fail('REVIEW_SEPARATION_REQUIRED', '提交者不能审核自己的变更', 403)
             if row['digest'] != expected_digest or row['status'] != 'validated':
@@ -254,6 +267,8 @@ class Registry:
         return self.changeset(identity, principal)
 
     def publish(self, identity, principal, expected_digest, infos):
+        from .discovery.workflow import check_current_review
+        check_current_review(self, identity, principal, infos)
         with self.connection(write=True) as db:
             row = self.change_in(db, identity, principal)
             if row['digest'] != expected_digest:
@@ -262,6 +277,8 @@ class Registry:
             if existing:
                 # Idempotent receipt; never silently reactivate an old release.
                 return {'release_id': existing['id'], 'active': self.active_in(db, row['namespace']), 'idempotent': True}
+            from .discovery.workflow import check_review_link
+            check_review_link(db, identity)
             review = db.execute('SELECT * FROM reviews WHERE changeset_id=?', (identity,)).fetchone()
             if row['status'] != 'approved' or not review or review['digest'] != row['digest'] or review['decision'] != 'approved':
                 fail('REVIEW_REQUIRED', '只有摘要匹配且审核通过的变更可以发布')
@@ -350,5 +367,7 @@ class Registry:
             # Audit may mention removed assets, so require coverage of historical proposal scopes.
             scopes = db.execute('SELECT scope FROM changesets WHERE namespace=?', (namespace,)).fetchall()
             authorized(principal, {s for row in scopes for s in json.loads(row[0])}, admin=True)
+            discovery_sources = db.execute('SELECT DISTINCT source_id FROM discovery_runs WHERE namespace=?', (namespace,)).fetchall()
+            authorized(principal, {row[0] for row in discovery_sources}, admin=True)
             rows = db.execute('SELECT * FROM audit WHERE namespace=? ORDER BY seq DESC LIMIT 100', (namespace,)).fetchall()
             return {'events': [dict(row, details=json.loads(row['details'])) for row in rows]}

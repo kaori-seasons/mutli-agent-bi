@@ -2,6 +2,8 @@
 
 > P1 已落地：Registry v2、双人审核、不可变发布、CAS 回滚及已发布模板查询。默认保持 P0 路径；启用方式和验证证据见 [P1 实施记录](docs/implementation/2026-11-25-p1-registry-and-query-integration.md)。
 
+> P2 已落地：MySQL 白名单元数据与聚合画像、复合键关系证据、自动候选编译和 `/ontology-review` 审核台。采集默认关闭，自动结果不进入发布区；人工移交后仍须独立审核与显式发布。配置、限制、测试和回退步骤见 [P2 实施记录](docs/implementation/2026-11-27-p2-candidate-discovery-and-review.md)。
+
 > 2026-11-25：已接入 P0 身份认证、受控 SQL 执行与审核式多库聚合。升级配置、测试证据和生产边界见 [P0 实施记录](docs/implementation/2026-11-25-p0-security-and-federation.md)。首次升级必须配置 `AUTH_SOURCE_GRANTS`；默认不授予查询权限。
 
 基于多Agent构建的chatbi

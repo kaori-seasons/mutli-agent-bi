@@ -8,8 +8,8 @@ export async function ontologyProxy(req: NextApiRequest, res: NextApiResponse, a
   const method = req.method;
   const id = '[0-9a-f]{32}';
   const adminRoutes: Record<string, RegExp> = {
-    GET: new RegExp(`^(releases|audit|changesets|changesets/${id})$`),
-    POST: new RegExp(`^(migrate-v1|changesets|changesets/${id}/review|releases|activate|releases/${id}/quarantine)$`),
+    GET: new RegExp(`^(releases|audit|changesets|changesets/${id}|discovery/config|discovery/runs|discovery/runs/${id})$`),
+    POST: new RegExp(`^(migrate-v1|changesets|changesets/${id}/review|releases|activate|releases/${id}/quarantine|discovery/runs|discovery/runs/${id}/prepare-review)$`),
   };
   const readRoutes: Record<string, RegExp> = { GET: /^entities\/[^/]{1,160}$/, POST: /^search$/ };
   if (!(area === 'ontology' ? adminRoutes : readRoutes)[method || '']?.test(path)) return res.status(404).end();
