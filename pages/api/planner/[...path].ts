@@ -8,8 +8,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!Array.isArray(parts) || parts.some(p => typeof p !== 'string')) return res.status(404).end();
   const path = parts.join('/');
   const routes: Record<string, RegExp> = {
-    POST: /^(questions\/check|relations\/plan|query-plans\/validate|queries\/execute)$/,
-    GET: /^(query-plans\/[0-9a-f]{32}|executions\/[0-9a-f]{32}|metrics\/[A-Za-z0-9_:.-]{1,160})$/,
+    POST: /^(questions\/check|relations\/plan|query-plans\/validate|queries\/execute|analysis\/tasks|governance\/status)$/,
+    GET: /^(query-plans\/[0-9a-f]{32}|executions\/[0-9a-f]{32}|analysis\/tasks\/[0-9a-f]{32}|metrics\/[A-Za-z0-9_:.-]{1,160})$/,
   };
   if (!routes[req.method || '']?.test(path)) return res.status(404).end();
   if (!requireBearer(req, res)) return;

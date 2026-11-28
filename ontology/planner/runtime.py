@@ -45,6 +45,9 @@ def policy_guard(registry, data, db=None):
     document, _ = registry.release_in(db, active, namespace())
     if policy_fingerprint(document, data['source_ids'][0]) != data['policy_fingerprint']:
         fail('STALE_POLICY', '当前批准政策已变化，请重新规划')
+    from ontology.governance.runtime import guard_in
+    pinned, _ = registry.release_in(db, data['release_id'], namespace())
+    guard_in(db, namespace(), pinned, data['dependencies'])
 
 
 def configuration():
@@ -177,6 +180,11 @@ def execute_plan(registry, principal, infos, plan_id, idempotency_key, budget=No
         if catalog_for(data['physical_entities'], infos[source], budget)['fingerprint'] != data['catalog_fingerprint']: fail('STALE_BINDING', '计划的数据库结构已变化', 422)
         registry.ensure_usable(namespace(), data['release_id'])
         policy_guard(registry, data)
+        from ontology.governance.rules import evaluate
+        quality = [evaluate(rule, data['physical_entities'], infos[source], budget,
+                            prepared=PreparedQuery(data['quality_queries'][rule['id']], data['parameters']))
+                   for rule in data.get('quality_rules', [])]
+        if any(q['status'] != 'passed' for q in quality): fail('QUALITY_FAILED', '批准质量规则未通过，不能输出完整指标答案', 422)
         started = datetime.now(timezone.utc).isoformat()
         result = execute_source(infos[source], PreparedQuery(data['sql'], data['parameters']), budget)
         ended = datetime.now(timezone.utc).isoformat()
@@ -200,6 +208,7 @@ def execute_plan(registry, principal, infos, plan_id, idempotency_key, budget=No
                         read_started_at=started, read_finished_at=ended, snapshot='statement_only',
                         row_count=len(rows), truncated=False, checks=['scope', 'release', 'schema_before_after', 'output_columns', 'numeric_values', 'complete'],
                         events=['retrieved', 'selected', 'validated', 'executed', 'verified'], sql_calls=budget.calls)
+        evidence['quality_results'] = quality
         payload = dict(columns=data['outputs'], labels=data['labels'], column_types=data['column_types'], rows=rows,
                        row_count=len(rows), sql=data['sql'], evidence=evidence,
                        content='已按批准指标口径完成查询；NULL 表示无适用值或零分母，不作因果解释。', warnings=data['warnings'])

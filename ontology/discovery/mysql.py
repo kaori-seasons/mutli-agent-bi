@@ -27,13 +27,13 @@ class Collector:
             raise ServiceError('DISCOVERY_TRUNCATED', '元数据或证据不完整，未编译候选', 422)
         return [dict(zip(output['columns'], row)) for row in output['rows']]
 
-    def catalog(self):
+    def catalog(self, *, tolerate_missing=False):
         names = list(self.policy['tables'])
         params = {'p0': self.info['db'], **{'p' + str(i + 1): value for i, value in enumerate(names)}}
         slots = ','.join(':p' + str(i + 1) for i in range(len(names)))
         tables = self.read('SELECT TABLE_NAME AS name,TABLE_TYPE AS kind,ENGINE AS engine,TABLE_COMMENT AS comment '
                            f'FROM information_schema.TABLES WHERE TABLE_SCHEMA=:p0 AND TABLE_NAME IN ({slots}) ORDER BY TABLE_NAME', params, catalog=True)
-        if {t['name'] for t in tables} != set(names) or any(t['kind'] != 'BASE TABLE' for t in tables):
+        if not tolerate_missing and ({t['name'] for t in tables} != set(names) or any(t['kind'] != 'BASE TABLE' for t in tables)):
             raise ServiceError('CATALOG_SCOPE_INVALID', '配置表不可见或不是基础表', 422)
         columns = self.read('SELECT TABLE_NAME AS table_name,COLUMN_NAME AS name,COLUMN_TYPE AS dtype,DATA_TYPE AS base_type,'
                             'IS_NULLABLE AS nullable,COLLATION_NAME AS collation,ORDINAL_POSITION AS position,COLUMN_COMMENT AS comment '
@@ -48,7 +48,8 @@ class Collector:
         result = {'source_id': self.info['source_id'], 'database': self.info['db'], 'tables': [], 'relations': []}
         for table in tables:
             name = table['name']
-            wanted = self.policy['tables'][name]['columns']
+            wanted = ([c['name'] for c in columns if c['table_name'] == name] if tolerate_missing
+                      else self.policy['tables'][name]['columns'])
             cols = [dict(c, comment=(c['comment'] or '')[:2000]) for c in columns if c['table_name'] == name and c['name'] in wanted]
             if {c['name'] for c in cols} != set(wanted):
                 raise ServiceError('CATALOG_SCOPE_INVALID', '配置列不可见，未编译候选', 422)
@@ -60,6 +61,8 @@ class Collector:
                       if all(r['non_unique'] == 0 and r['prefix_length'] is None and r['column_name'] in wanted for r in rows)}
             result['tables'].append(dict(name=name, engine=table['engine'], comment=(table['comment'] or '')[:2000],
                                          columns=cols, primary_key=unique.get('PRIMARY', []), unique_keys=unique))
+            if tolerate_missing:
+                result['tables'][-1]['kind'] = table['kind']
         groups = {}
         for fk in fks:
             groups.setdefault((fk['table_name'], fk['name']), []).append(fk)

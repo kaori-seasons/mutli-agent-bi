@@ -74,6 +74,14 @@ def read_export(principal, identity):
         if isinstance(manifest, dict):
             from ontology.registry import Registry
             Registry().ensure_usable(manifest["namespace"], manifest["release_id"])
+            if not manifest.get('execution_id'):
+                from ontology.governance.runtime import guard
+                registry = Registry()
+                with registry.connection() as db:
+                    doc, _ = registry.release_in(db, manifest['release_id'], manifest['namespace'])
+                # Old exports had no template lineage: conservatively check their whole source scope.
+                targets = manifest.get('dependency_ids', [e['id'] for e in doc['entities'] if set(e['source_ids']) & set(source_ids)])
+                guard(registry, manifest['namespace'], manifest['release_id'], targets)
             if manifest.get('execution_id'):
                 from ontology.planner.runtime import get_execution
                 from . import conf

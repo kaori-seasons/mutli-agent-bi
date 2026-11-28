@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-28T10:38:21.652139+00:00",
+  "scope": "local_synthetic_engineering",
+  "local_gate": "passed",
+  "python": "3.12.13",
+  "tests": 258,
+  "skipped": 0,
+  "failures": 0,
+  "errors": 0,
+  "failed_cases": [],
+  "measurements": {
+    "quality_scope": {
+      "status": "passed",
+      "reader_policy_applied": true,
+      "reader_violations": 0,
+      "admin_table_violations": 1
+    },
+    "mcp": {
+      "status": "passed",
+      "transport": "stdio adapter to real RS256 loopback REST",
+      "real_cognito": false,
+      "management_tools_exposed": false
+    },
+    "E4_local": {
+      "status": "passed",
+      "data": "synthetic",
+      "roles": "deterministic",
+      "baseline_sql_calls": 13,
+      "verified_sql_calls": 26,
+      "baseline_elapsed_ms": 186.933,
+      "verified_elapsed_ms": 279.905,
+      "same_results": true,
+      "model_calls": 0,
+      "business_incremental_benefit": "not_evaluated"
+    },
+    "quality": {
+      "status": "passed",
+      "actual_null_violations": 1,
+      "method": "exact_count",
+      "sampled": false
+    },
+    "drift_loop": {
+      "status": "passed",
+      "rename_detected": true,
+      "old_receipt_blocked": true,
+      "new_approved_release_required": true,
+      "fresh_recheck": true,
+      "source_data_written_by_application": false
+    },
+    "unique_quality": {
+      "status": "passed",
+      "composite_primary_key_violations": 0,
+      "duplicate_groups_including_null": 3,
+      "null_groups_checked": true
+    }
+  },
+  "E4_fault_controls": {
+    "scope": "deterministic result-artifact fault controls; not an LLM accuracy dataset",
+    "cases": [
+      {
+        "case": "valid",
+        "injected_fault": false,
+        "independent_verifier_rejected": false,
+        "matches_expectation": true
+      },
+      {
+        "case": "missing_group",
+        "injected_fault": true,
+        "independent_verifier_rejected": true,
+        "matches_expectation": true
+      },
+      {
+        "case": "duplicated_group",
+        "injected_fault": true,
+        "independent_verifier_rejected": true,
+        "matches_expectation": true
+      },
+      {
+        "case": "wrong_amount",
+        "injected_fault": true,
+        "independent_verifier_rejected": true,
+        "matches_expectation": true
+      }
+    ],
+    "baseline_independent_checks": 0,
+    "faults_detected": 3,
+    "false_rejections": 0
+  },
+  "source_sha256": {
+    "integrations/__init__.py": "4c384f0c041e2d2eb646c235e29b6ef96a52b38666e20df9a50522b1732bb3e8",
+    "integrations/mcp_stdio.py": "973a523fd1868c7b6aa53f421ccf771cbb75b588c4fcd705c6faf2e6654377ba",
+    "main.py": "f18588e7532be6d47a61b432e3342914d831c98628543c73426c94581b72411a",
+    "ontology/analysis/__init__.py": "f4fe68914fae4f8c7957db8861f7fc03318370a0e533149109d5fb75a2f90df1",
+    "ontology/analysis/runtime.py": "975c6b03df02d7c34cfacce9edcf3ded42df81538080b08683c519351c5cb890",
+    "ontology/governance/__init__.py": "4dd7cabb557c6e877425ab973f1625025048f76ce0e30dc952fec8ef46bc54ad",
+    "ontology/governance/rules.py": "ad4958d59c8d53fd0609148de686b1f0ba0fcce6c02746a90173f98113853dec",
+    "ontology/governance/runtime.py": "1c998cf100641a018b7024bef3d4a444a09771a696f1fec6f1d83921a233a02f",
+    "ontology/planner/compiler.py": "11d089dd2c10b7272af425c4fee722f1dd3979f9f9bbb04ee5cac4a0bdf13e8e",
+    "ontology/planner/runtime.py": "16786c180213293ef5a54377e951da95c978bf2674a2e2a7524e406366f05d30",
+    "server/governance_api.py": "04ee93f23ddfcc5560f8ecd459bec22eab481420bf8309ef8a29b2f1d334cd55"
+  },
+  "online_rollout_percent": 0,
+  "business_E1_E4_gate": "not_evaluated",
+  "limitations": [
+    "Synthetic MySQL fixture and local JWKS; no production-volume or real Cognito/model calls.",
+    "E4 checks additive arithmetic and isolated injected faults, not causal explanation or business accuracy uplift.",
+    "Independent SQL statements do not share a source snapshot; concurrent changes may cause conservative rejection."
+  ]
+}

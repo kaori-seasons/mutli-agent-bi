@@ -167,6 +167,8 @@ def prepare(principal, source_ids, question, infos, options=None):
 def guard(context):
     if context:
         context['registry'].ensure_usable(context['namespace'], context['release_id'])
+        from .governance.runtime import guard as governance_guard
+        governance_guard(context['registry'], context['namespace'], context['release_id'], context['dependencies'])
 
 
 def evidence(context):

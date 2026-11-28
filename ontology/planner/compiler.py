@@ -12,7 +12,7 @@ from ontology.discovery.policy import quote
 from ontology.discovery.mysql import Collector
 from server.query_policy import PreparedQuery
 
-VERSION = 'metric-compiler/1'
+VERSION = 'metric-compiler/2'
 
 
 def family(dtype):
@@ -233,7 +233,17 @@ def compile_plan(pin, full_document, intent, infos, budget):
         if e is None: break
         remaining.remove(e); applied += 1
         if applied > 32: raise invalid('适用政策数量超过执行预算')
-        if e['kind'] == 'QualityRule': fail('POLICY_UNSUPPORTED', '相关质量规则尚无受控执行器，不能忽略', 422)
+        if e['kind'] == 'QualityRule':
+            from ontology.governance.rules import parse
+            from server.errors import ServiceError
+            try: spec, _ = parse(e, visible)
+            except ServiceError: fail('POLICY_UNSUPPORTED', '相关质量规则超出受控语法，不能忽略', 422)
+            if any(visible[k]['attributes']['dataset_id'] != base_id for k in spec['field_ids']):
+                fail('POLICY_UNSUPPORTED', '在线质量检查仅支持事实表字段；维表规则须由治理扫描验证', 422)
+            get(e['id'], 'QualityRule')
+            for key in spec['field_ids']: column(key)
+            targets.update(selected); targets.update(e['dependencies'])
+            continue
         get(e['id'], 'Policy')
         try: rule = json.loads(e['attributes']['definition'])
         except (ValueError, TypeError): raise invalid('相关政策不是受支持的结构化规则') from None
@@ -267,11 +277,26 @@ def compile_plan(pin, full_document, intent, infos, budget):
             if (left['dtype'], left['collation']) != (right['dtype'], right['collation']): raise invalid('关系键类型或排序规则不一致')
     outputs = ['d' + str(i) for i in range(len(dimensions))] + ['m' + str(i) for i in range(len(measures))]
     sql = 'SELECT ' + ', '.join(expr + ' AS ' + alias for expr, alias in zip(dimensions + measures, outputs))
-    sql += ' FROM ' + quote(base['attributes']['physical_name']) + ' AS t0'
-    if join_sql: sql += ' ' + ' '.join(join_sql)
-    if predicates: sql += ' WHERE ' + ' AND '.join('(' + p + ')' for p in predicates)
+    population = ' FROM ' + quote(base['attributes']['physical_name']) + ' AS t0'
+    if join_sql: population += ' ' + ' '.join(join_sql)
+    if predicates: population += ' WHERE ' + ' AND '.join('(' + p + ')' for p in predicates)
+    sql += population
     if dimensions: sql += ' GROUP BY ' + ', '.join(dimensions) + ' ORDER BY ' + ', '.join('d' + str(i) for i in range(len(dimensions)))
     PreparedQuery(sql, params).driver_query(infos[source]['db'])
+    # Reader-triggered quality SQL must use exactly the same authorized population,
+    # including mandatory subject policies, time window, fixed filters and joins.
+    quality_queries = {}
+    for rule in [e for e in selected.values() if e['kind'] == 'QualityRule']:
+        from ontology.governance.rules import parse
+        spec, _ = parse(rule, visible)
+        aliases = ['q' + str(i) for i in range(len(spec['field_ids']))]
+        scoped = 'SELECT ' + ','.join(column(k) + ' AS ' + a for k, a in zip(spec['field_ids'], aliases)) + population
+        if spec['check'] == 'not_null':
+            query = 'SELECT COUNT(*) AS violations FROM (' + scoped + ') AS scoped WHERE ' + ' OR '.join(a + ' IS NULL' for a in aliases)
+        else:
+            query = 'SELECT COUNT(*) AS violations FROM (SELECT ' + ','.join(aliases) + ' FROM (' + scoped + ') AS scoped GROUP BY ' + ','.join(aliases) + ' HAVING COUNT(*)>1) AS duplicate_groups'
+        PreparedQuery(query, params).driver_query(infos[source]['db'])
+        quality_queries[rule['id']] = query
     # Record transitive semantic dependencies without adding unused tables to physical SQL scope.
     pending = list(selected)
     while pending:
@@ -285,5 +310,7 @@ def compile_plan(pin, full_document, intent, infos, budget):
                           'grain': m['attributes']['grain'], 'time_definition': m['attributes']['time_definition'], 'aggregation': m['attributes']['aggregation']} for m in metrics],
                 relations=[{'id': r['id'], 'version': r['version']} for r in joins],
                 dependencies={k: e['version'] for k, e in selected.items()},
+                quality_rules=[e for e in selected.values() if e['kind'] == 'QualityRule'],
+                quality_queries=quality_queries,
                 catalog_fingerprint=catalog['fingerprint'], physical_entities=physical_entities,
                 warnings=['源数据不具有跨请求快照保证；参考关系在执行时重新验证唯一键。'])

@@ -136,6 +136,19 @@ class Registry:
                 id TEXT PRIMARY KEY, namespace TEXT, actor TEXT, idempotency_key TEXT, plan_id TEXT,
                 state TEXT, payload TEXT, digest TEXT, error_code TEXT, created REAL, expires REAL, lease_until REAL,
                 UNIQUE(namespace,actor,idempotency_key));
+            CREATE TABLE IF NOT EXISTS governance_runs (
+                id TEXT PRIMARY KEY, namespace TEXT, source_id TEXT, actor TEXT, idempotency_key TEXT,
+                release_id TEXT, state TEXT, payload TEXT, digest TEXT, created REAL, lease_until REAL,
+                UNIQUE(namespace,actor,idempotency_key));
+            CREATE TABLE IF NOT EXISTS governance_incidents (
+                id TEXT PRIMARY KEY, namespace TEXT, source_id TEXT, issue_key TEXT, release_id TEXT,
+                owner TEXT, state TEXT, revision INTEGER, payload TEXT, last_run TEXT, updated REAL);
+            CREATE UNIQUE INDEX IF NOT EXISTS open_governance_issue ON governance_incidents(namespace,source_id,issue_key)
+                WHERE state != 'resolved';
+            CREATE TABLE IF NOT EXISTS analysis_tasks (
+                id TEXT PRIMARY KEY, namespace TEXT, actor TEXT, idempotency_key TEXT, request_digest TEXT,
+                source_id TEXT, release_id TEXT, state TEXT, payload TEXT, digest TEXT, created REAL, expires REAL,
+                lease_until REAL, UNIQUE(namespace,actor,idempotency_key));
             ''')
             if db.execute('SELECT version FROM metadata').fetchone()[0] != 2:
                 fail('REGISTRY_CONFIGURATION', '注册仓库格式不兼容', 503)

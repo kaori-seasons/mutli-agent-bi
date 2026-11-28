@@ -19,6 +19,8 @@ def create_app(query_service=None, verifier=None):
     app.register_blueprint(blueprint)
     from server.planner_api import blueprint as planner_blueprint
     app.register_blueprint(planner_blueprint)
+    from server.governance_api import blueprint as governance_blueprint
+    app.register_blueprint(governance_blueprint)
     initialized = False
     lock = threading.Lock()
 
@@ -74,6 +76,10 @@ def create_app(query_service=None, verifier=None):
         granted = {source for sources in grants.values() for source in sources}
         if not granted or not granted <= set(conf.mysql_info):
             raise ServiceError("NOT_READY", "数据源授权为空或引用了不存在的数据源", 503)
+        from ontology.governance.runtime import enabled_sources
+        governed = enabled_sources()
+        if not governed <= granted:
+            raise ServiceError('NOT_READY', '治理源必须具有有效数据源授权', 503)
         conf.load_sql_templates(publish=False)
         from ontology.runtime import query_sources, namespace
         enabled = query_sources()

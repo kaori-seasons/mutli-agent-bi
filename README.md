@@ -8,6 +8,8 @@
 
 > P3 [本地生产工程验收](docs/implementation/2026-11-28-p3-local-production-acceptance.md)通过：255 项测试，覆盖签名 HTTP、真实 MySQL、10 客户端负载与恢复演练。灰度仍为 0；本地目录拒答对照不替代 E1 模型质量对照或真实业务放量验收。
 
+> P4 工程链路已落地：漂移/质量扫描、有 owner 的问题处置与复验解隔离、共享预算的按需总量核验、只提供分析工具的 MCP stdio 适配。当前 300 项回归通过；治理与协作默认关闭，P3 灰度保持 0。E4 的合成证据与未完成的真实业务门槛见 [P4 实施记录](docs/implementation/2026-11-28-p4-governance-and-controlled-collaboration.md)。
+
 > 2026-11-25：已接入 P0 身份认证、受控 SQL 执行与审核式多库聚合。升级配置、测试证据和生产边界见 [P0 实施记录](docs/implementation/2026-11-25-p0-security-and-federation.md)。首次升级必须配置 `AUTH_SOURCE_GRANTS`；默认不授予查询权限。
 
 基于多Agent构建的chatbi

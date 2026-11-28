@@ -157,7 +157,8 @@ def get_result(msg, trace_id, user_id="", mode_type="normal", *, principal=None,
     elif result["row_count"] > limit:
         from .exports import save_export
         try:
-            release = ({"namespace": ontology_context["namespace"], "release_id": ontology_context["release_id"]}
+            release = ({"namespace": ontology_context["namespace"], "release_id": ontology_context["release_id"],
+                        "dependency_ids": list(ontology_context['dependencies'])}
                        if ontology_context else None)
             response["extra"] = save_export(principal, ids, columns, result["rows"], release=release)
             response["content"] += f"\n当前展示 {limit} 行，可下载本次完整结果（10 分钟内有效）。"
