@@ -17,6 +17,8 @@ def create_app(query_service=None, verifier=None):
     app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
     from server.ontology_api import blueprint
     app.register_blueprint(blueprint)
+    from server.planner_api import blueprint as planner_blueprint
+    app.register_blueprint(planner_blueprint)
     initialized = False
     lock = threading.Lock()
 
@@ -81,6 +83,17 @@ def create_app(query_service=None, verifier=None):
             from ontology.registry import Registry
             from server.auth import Principal
             Registry().pin(namespace(), Principal("readiness", frozenset(enabled)))
+        from ontology.planner.runtime import configuration as planner_configuration
+        planner_sources, planner_percent = planner_configuration()
+        if planner_sources and planner_percent:
+            if not planner_sources <= granted:
+                raise ServiceError('NOT_READY', '规划灰度源必须具有有效源授权', 503)
+            from ontology.registry import Registry
+            from server.auth import Principal
+            pin = Registry().pin(namespace(), Principal('readiness', frozenset(planner_sources)))
+            ready_sources = {e['source_ids'][0] for e in pin['entities'].values() if e['kind'] == 'MetricContract' and len(e['source_ids']) == 1}
+            if not planner_sources <= ready_sources:
+                raise ServiceError('NOT_READY', '规划灰度源缺少已发布指标编译契约', 503)
         return jsonify({"status": "ready", "model_probe": "not_run"})
 
     @app.get("/auth/session")

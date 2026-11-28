@@ -74,6 +74,11 @@ def read_export(principal, identity):
         if isinstance(manifest, dict):
             from ontology.registry import Registry
             Registry().ensure_usable(manifest["namespace"], manifest["release_id"])
+            if manifest.get('execution_id'):
+                from ontology.planner.runtime import get_execution
+                from . import conf
+                conf._load_db_conf()
+                get_execution(Registry(), principal, manifest['execution_id'], conf.mysql_info)
         return row[2]
     finally:
         conn.close()

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-28T02:28:30.914942+00:00",
+  "data": "synthetic_only",
+  "production_gate": "not_evaluated",
+  "model_calls": 0,
+  "layers": {
+    "E0": {
+      "status": "passed",
+      "tests": 8,
+      "skipped": 0,
+      "failures": 0,
+      "errors": 0,
+      "failed_cases": [],
+      "scope": "existing P0 SQL/federation infrastructure regression only",
+      "answer_quality": "not_evaluated"
+    },
+    "E2": {
+      "status": "passed",
+      "tests": 8,
+      "skipped": 0,
+      "failures": 0,
+      "errors": 0,
+      "failed_cases": [],
+      "scope": "synthetic approved metric gold results"
+    },
+    "E3": {
+      "status": "passed",
+      "tests": 1,
+      "skipped": 0,
+      "failures": 0,
+      "errors": 0,
+      "failed_cases": [],
+      "scope": "P2 candidate → human review → explicit contract → execution"
+    },
+    "E1": {
+      "status": "not_run",
+      "reason": "A comparable catalog-only query loop and model baseline are not available; no fabricated scores."
+    }
+  },
+  "limitations": [
+    "No real Cognito, Bedrock, business data, 200-question human-reviewed set, latency/load or statistical uplift benchmark.",
+    "E0 infrastructure regression is not the original LLM answer-quality baseline; E1 catalog-only comparison is not implemented."
+  ],
+  "contract_tests": {
+    "status": "passed",
+    "tests": 37,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "failed_cases": []
+  }
+}

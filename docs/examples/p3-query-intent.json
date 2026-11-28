@@ -1,0 +1,26 @@
+{
+  "source_ids": [
+    "a"
+  ],
+  "metric_ids": [
+    "metric:sales"
+  ],
+  "dimensions": [
+    "field:customers:region"
+  ],
+  "relation_ids": [
+    "relation:customer"
+  ],
+  "filters": [
+    {
+      "field_id": "field:orders:tenant_id",
+      "op": "eq",
+      "value": 1
+    }
+  ],
+  "time": {
+    "start": "2026-11-01",
+    "end": "2026-12-01",
+    "timezone": "Asia/Shanghai"
+  }
+}

@@ -129,6 +129,13 @@ class Registry:
                 UNIQUE(namespace,actor,idempotency_key));
             CREATE TABLE IF NOT EXISTS discovery_review_links (
                 changeset_id TEXT PRIMARY KEY, run_id TEXT, artifact_digest TEXT, expires REAL);
+            CREATE TABLE IF NOT EXISTS query_plans (
+                id TEXT PRIMARY KEY, namespace TEXT, actor TEXT, source_id TEXT, release_id TEXT,
+                payload TEXT, digest TEXT, created REAL, expires REAL);
+            CREATE TABLE IF NOT EXISTS query_executions (
+                id TEXT PRIMARY KEY, namespace TEXT, actor TEXT, idempotency_key TEXT, plan_id TEXT,
+                state TEXT, payload TEXT, digest TEXT, error_code TEXT, created REAL, expires REAL, lease_until REAL,
+                UNIQUE(namespace,actor,idempotency_key));
             ''')
             if db.execute('SELECT version FROM metadata').fetchone()[0] != 2:
                 fail('REGISTRY_CONFIGURATION', '注册仓库格式不兼容', 503)

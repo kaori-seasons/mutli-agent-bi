@@ -1,0 +1,759 @@
+{
+  "schema_version": 2,
+  "namespace": "default",
+  "entities": [
+    {
+      "id": "source:a",
+      "kind": "DataSource",
+      "version": 1,
+      "name": "合成订单源",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [],
+      "availability": "reference",
+      "attributes": {
+        "engine": "mysql",
+        "database": "db_a",
+        "credential_ref": "source:a"
+      },
+      "legacy": {}
+    },
+    {
+      "id": "dataset:orders",
+      "kind": "Dataset",
+      "version": 1,
+      "name": "orders",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "source:a"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "physical_name": "orders",
+        "primary_key": [
+          "field:orders:tenant_id",
+          "field:orders:id"
+        ]
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:orders:tenant_id",
+      "kind": "Field",
+      "version": 1,
+      "name": "tenant_id",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "tenant_id",
+        "dtype": "int",
+        "primary_key": true
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:orders:id",
+      "kind": "Field",
+      "version": 1,
+      "name": "id",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "id",
+        "dtype": "int",
+        "primary_key": true
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:orders:customer_id",
+      "kind": "Field",
+      "version": 1,
+      "name": "customer_id",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "customer_id",
+        "dtype": "int",
+        "primary_key": false
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:orders:amount",
+      "kind": "Field",
+      "version": 1,
+      "name": "amount",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "amount",
+        "dtype": "decimal(12,2)",
+        "primary_key": false
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:orders:units",
+      "kind": "Field",
+      "version": 1,
+      "name": "units",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "units",
+        "dtype": "int",
+        "primary_key": false
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:orders:created_at",
+      "kind": "Field",
+      "version": 1,
+      "name": "created_at",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "created_at",
+        "dtype": "datetime",
+        "primary_key": false
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:orders:owner_id",
+      "kind": "Field",
+      "version": 1,
+      "name": "owner_id",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:orders",
+        "physical_name": "owner_id",
+        "dtype": "varchar(80)",
+        "primary_key": false
+      },
+      "legacy": {}
+    },
+    {
+      "id": "dataset:customers",
+      "kind": "Dataset",
+      "version": 1,
+      "name": "customers",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "source:a"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "physical_name": "customers",
+        "primary_key": [
+          "field:customers:tenant_id",
+          "field:customers:id"
+        ]
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:customers:tenant_id",
+      "kind": "Field",
+      "version": 1,
+      "name": "tenant_id",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:customers"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:customers",
+        "physical_name": "tenant_id",
+        "dtype": "int",
+        "primary_key": true
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:customers:id",
+      "kind": "Field",
+      "version": 1,
+      "name": "id",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:customers"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:customers",
+        "physical_name": "id",
+        "dtype": "int",
+        "primary_key": true
+      },
+      "legacy": {}
+    },
+    {
+      "id": "field:customers:region",
+      "kind": "Field",
+      "version": 1,
+      "name": "region",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:customers"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "dataset_id": "dataset:customers",
+        "physical_name": "region",
+        "dtype": "varchar(80)",
+        "primary_key": false
+      },
+      "legacy": {}
+    },
+    {
+      "id": "relation:customer",
+      "kind": "Relation",
+      "version": 1,
+      "name": "订单客户",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders",
+        "dataset:customers",
+        "field:orders:tenant_id",
+        "field:orders:customer_id",
+        "field:customers:tenant_id",
+        "field:customers:id"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "left_dataset": "dataset:orders",
+        "left_keys": [
+          "field:orders:tenant_id",
+          "field:orders:customer_id"
+        ],
+        "right_dataset": "dataset:customers",
+        "right_keys": [
+          "field:customers:tenant_id",
+          "field:customers:id"
+        ],
+        "join_type": "left",
+        "cardinality": "many-to-one"
+      },
+      "legacy": {}
+    },
+    {
+      "id": "metric:sales",
+      "kind": "Metric",
+      "version": 1,
+      "name": "sales",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders",
+        "field:orders:tenant_id",
+        "field:orders:id",
+        "field:orders:amount"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "expression": "SUM(amount)",
+        "aggregation": "sum",
+        "field_ids": [
+          "field:orders:amount"
+        ],
+        "grain": [
+          "field:orders:tenant_id",
+          "field:orders:id"
+        ],
+        "unit": "CNY",
+        "time_definition": "created_at 存储为 Asia/Shanghai 本地时间，按订单主键聚合",
+        "filters": []
+      },
+      "legacy": {}
+    },
+    {
+      "id": "contract:sales",
+      "kind": "MetricContract",
+      "version": 1,
+      "name": "sales 编译契约",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "metric:sales",
+        "dataset:orders",
+        "field:customers:region",
+        "field:orders:tenant_id",
+        "field:orders:owner_id",
+        "field:orders:amount",
+        "relation:customer",
+        "field:orders:created_at"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "metric_id": "metric:sales",
+        "dataset_id": "dataset:orders",
+        "dimensions": [
+          "field:customers:region"
+        ],
+        "filter_fields": [
+          "field:orders:tenant_id",
+          "field:orders:owner_id",
+          "field:orders:amount",
+          "field:customers:region"
+        ],
+        "relation_ids": [
+          "relation:customer"
+        ],
+        "time_field": "field:orders:created_at",
+        "timezone": "Asia/Shanghai",
+        "required_filters": [
+          "field:orders:tenant_id"
+        ]
+      },
+      "legacy": {}
+    },
+    {
+      "id": "metric:average",
+      "kind": "Metric",
+      "version": 1,
+      "name": "average",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders",
+        "field:orders:tenant_id",
+        "field:orders:id",
+        "field:orders:amount"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "expression": "AVG(amount)",
+        "aggregation": "avg",
+        "field_ids": [
+          "field:orders:amount"
+        ],
+        "grain": [
+          "field:orders:tenant_id",
+          "field:orders:id"
+        ],
+        "unit": "CNY",
+        "time_definition": "created_at 存储为 Asia/Shanghai 本地时间，按订单主键聚合",
+        "filters": []
+      },
+      "legacy": {}
+    },
+    {
+      "id": "contract:average",
+      "kind": "MetricContract",
+      "version": 1,
+      "name": "average 编译契约",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "metric:average",
+        "dataset:orders",
+        "field:customers:region",
+        "field:orders:tenant_id",
+        "field:orders:owner_id",
+        "field:orders:amount",
+        "relation:customer",
+        "field:orders:created_at"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "metric_id": "metric:average",
+        "dataset_id": "dataset:orders",
+        "dimensions": [
+          "field:customers:region"
+        ],
+        "filter_fields": [
+          "field:orders:tenant_id",
+          "field:orders:owner_id",
+          "field:orders:amount",
+          "field:customers:region"
+        ],
+        "relation_ids": [
+          "relation:customer"
+        ],
+        "time_field": "field:orders:created_at",
+        "timezone": "Asia/Shanghai",
+        "required_filters": [
+          "field:orders:tenant_id"
+        ]
+      },
+      "legacy": {}
+    },
+    {
+      "id": "metric:price",
+      "kind": "Metric",
+      "version": 1,
+      "name": "price",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders",
+        "field:orders:tenant_id",
+        "field:orders:id",
+        "field:orders:amount",
+        "field:orders:units"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "expression": "SUM(amount)/NULLIF(SUM(units),0)",
+        "aggregation": "ratio",
+        "field_ids": [
+          "field:orders:amount",
+          "field:orders:units"
+        ],
+        "grain": [
+          "field:orders:tenant_id",
+          "field:orders:id"
+        ],
+        "unit": "CNY/件",
+        "time_definition": "created_at 存储为 Asia/Shanghai 本地时间，按订单主键聚合",
+        "filters": []
+      },
+      "legacy": {}
+    },
+    {
+      "id": "contract:price",
+      "kind": "MetricContract",
+      "version": 1,
+      "name": "price 编译契约",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "metric:price",
+        "dataset:orders",
+        "field:customers:region",
+        "field:orders:tenant_id",
+        "field:orders:owner_id",
+        "field:orders:amount",
+        "relation:customer",
+        "field:orders:created_at"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "metric_id": "metric:price",
+        "dataset_id": "dataset:orders",
+        "dimensions": [
+          "field:customers:region"
+        ],
+        "filter_fields": [
+          "field:orders:tenant_id",
+          "field:orders:owner_id",
+          "field:orders:amount",
+          "field:customers:region"
+        ],
+        "relation_ids": [
+          "relation:customer"
+        ],
+        "time_field": "field:orders:created_at",
+        "timezone": "Asia/Shanghai",
+        "required_filters": [
+          "field:orders:tenant_id"
+        ]
+      },
+      "legacy": {}
+    },
+    {
+      "id": "metric:buyers",
+      "kind": "Metric",
+      "version": 1,
+      "name": "buyers",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders",
+        "field:orders:tenant_id",
+        "field:orders:id",
+        "field:orders:customer_id"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "expression": "COUNT(DISTINCT customer_id)",
+        "aggregation": "count_distinct",
+        "field_ids": [
+          "field:orders:customer_id"
+        ],
+        "grain": [
+          "field:orders:tenant_id",
+          "field:orders:id"
+        ],
+        "unit": "人",
+        "time_definition": "created_at 存储为 Asia/Shanghai 本地时间，按订单主键聚合",
+        "filters": []
+      },
+      "legacy": {}
+    },
+    {
+      "id": "contract:buyers",
+      "kind": "MetricContract",
+      "version": 1,
+      "name": "buyers 编译契约",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "metric:buyers",
+        "dataset:orders",
+        "field:customers:region",
+        "field:orders:tenant_id",
+        "field:orders:owner_id",
+        "field:orders:amount",
+        "relation:customer",
+        "field:orders:created_at"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "metric_id": "metric:buyers",
+        "dataset_id": "dataset:orders",
+        "dimensions": [
+          "field:customers:region"
+        ],
+        "filter_fields": [
+          "field:orders:tenant_id",
+          "field:orders:owner_id",
+          "field:orders:amount",
+          "field:customers:region"
+        ],
+        "relation_ids": [
+          "relation:customer"
+        ],
+        "time_field": "field:orders:created_at",
+        "timezone": "Asia/Shanghai",
+        "required_filters": [
+          "field:orders:tenant_id"
+        ]
+      },
+      "legacy": {}
+    },
+    {
+      "id": "metric:count",
+      "kind": "Metric",
+      "version": 1,
+      "name": "count",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "dataset:orders",
+        "field:orders:tenant_id",
+        "field:orders:id"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "expression": "COUNT(*)",
+        "aggregation": "count",
+        "field_ids": [],
+        "grain": [
+          "field:orders:tenant_id",
+          "field:orders:id"
+        ],
+        "unit": "条",
+        "time_definition": "created_at 存储为 Asia/Shanghai 本地时间，按订单主键聚合",
+        "filters": []
+      },
+      "legacy": {}
+    },
+    {
+      "id": "contract:count",
+      "kind": "MetricContract",
+      "version": 1,
+      "name": "count 编译契约",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "metric:count",
+        "dataset:orders",
+        "field:customers:region",
+        "field:orders:tenant_id",
+        "field:orders:owner_id",
+        "field:orders:amount",
+        "relation:customer",
+        "field:orders:created_at"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "metric_id": "metric:count",
+        "dataset_id": "dataset:orders",
+        "dimensions": [
+          "field:customers:region"
+        ],
+        "filter_fields": [
+          "field:orders:tenant_id",
+          "field:orders:owner_id",
+          "field:orders:amount",
+          "field:customers:region"
+        ],
+        "relation_ids": [
+          "relation:customer"
+        ],
+        "time_field": "field:orders:created_at",
+        "timezone": "Asia/Shanghai",
+        "required_filters": [
+          "field:orders:tenant_id"
+        ]
+      },
+      "legacy": {}
+    },
+    {
+      "id": "policy:owner",
+      "kind": "Policy",
+      "version": 1,
+      "name": "主体记录范围",
+      "owner": "fixture-owner",
+      "source_ids": [
+        "a"
+      ],
+      "description": "",
+      "synonyms": [],
+      "dependencies": [
+        "source:a",
+        "field:orders:owner_id"
+      ],
+      "availability": "reference",
+      "attributes": {
+        "target_ids": [
+          "source:a"
+        ],
+        "definition": "{\"filters\":[{\"field_id\":\"field:orders:owner_id\",\"op\":\"eq\",\"value\":{\"principal\":\"subject\"}}],\"version\":1}"
+      },
+      "legacy": {}
+    }
+  ],
+  "migration": {}
+}

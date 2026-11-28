@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-28T04:11:52.007774+00:00",
+  "acceptance_scope": "local_production_engineering",
+  "local_gate": "passed",
+  "python": "3.12.13",
+  "tests": 219,
+  "skipped": 0,
+  "failures": 0,
+  "errors": 0,
+  "failed_cases": [],
+  "measurements": {
+    "mysql_version": "8.0.46",
+    "restore": {
+      "status": "passed",
+      "method": "sqlite Connection.backup",
+      "release_preserved": true,
+      "duplicate_sql": 0
+    },
+    "E1_local_control": {
+      "status": "passed",
+      "input": "same source and structured metric intent",
+      "catalog_only": "abstained; zero business SQL",
+      "approved_contract": "count=5",
+      "claim": "authorization/semantic boundary control, not an LLM answer-quality comparison"
+    },
+    "five_percent": {
+      "status": "passed",
+      "eligible_bucket": 2,
+      "ineligible_bucket": 16,
+      "stable_repeat": true,
+      "source_grants_rechecked": true,
+      "changed_default_configuration": false
+    },
+    "knowledge_load": {
+      "clients": 10,
+      "requests": 200,
+      "p95_ms": 75.151,
+      "max_ms": 136.748,
+      "temperature": "warm local process",
+      "note": "200 repeated load requests are not 200 independently reviewed business questions"
+    },
+    "authentication": {
+      "transport": "real_loopback_http",
+      "signature": "RS256-2048",
+      "verifier": "production authenticate()",
+      "jwks": "local in-memory key resolver",
+      "real_cognito": false,
+      "negative_cases_passed": 5
+    },
+    "source_recovery": {
+      "status": "passed",
+      "fault": "actual MySQL read account locked then unlocked",
+      "failed_result_reused": false
+    },
+    "execution_load": {
+      "clients": 10,
+      "logical_queries": 100,
+      "correct_results": 100,
+      "wrong_results": 0,
+      "http_status_counts": {
+        "200": 100,
+        "429": 385
+      },
+      "retry": "same idempotency key, 25ms bounded admission backoff",
+      "wall_seconds": 5.452,
+      "p50_ms": 386.277,
+      "p95_ms": 974.718,
+      "max_ms": 1559.783,
+      "includes_admission_wait": true,
+      "fixture_rows": 8,
+      "production_scale_claim": false
+    },
+    "rollout_rollback": {
+      "status": "passed",
+      "tested_percentages": [
+        100,
+        0,
+        100
+      ],
+      "legacy_health_preserved": true
+    }
+  },
+  "source_sha256": {
+    "ontology/planner/compiler.py": "36dcd5ece0635db7b6c87be2161a7b232cfc558a5870b39defa26c9bbe34ea3e",
+    "ontology/planner/__init__.py": "47e0b45cdac909f277c369eb604624bb6c2935df87899eff83436db48e6e1c32",
+    "ontology/planner/runtime.py": "3e2fcfdc0c2368417199dd0f0d44490eb01835e784b70bc3f3bfaa59b1ea9c23",
+    "server/planner_api.py": "bbee9a7a6fcb4d8fdf5d9c2bb7dfefaf6ba2e58c0833931667e5510d5fb87d69",
+    "server/auth.py": "c184514acf5475fa48b29a150c04b3761f71fb17a05ec02dc1e776eff5436e5d",
+    "server/exports.py": "bc85a9b8821c5e48b95020db480540457977f638c032de520ec36e0622ee3f23",
+    "main.py": "a7eb928b7c64e730a176dafff39654581346ef5062b7bc1e9bc0631eb012a2ed"
+  },
+  "online_rollout_authorized": false,
+  "online_rollout_percent": 0,
+  "limitations": [
+    "Local synthetic fixture, not production-volume data.",
+    "RS256 gateway validated with local JWKS resolver; actual Cognito not contacted.",
+    "E1 is a catalog-only abstention control, not a model quality baseline.",
+    "No real-business 200-question owner-reviewed dataset or E0/E1 LLM statistical comparison."
+  ]
+}

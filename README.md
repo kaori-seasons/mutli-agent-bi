@@ -4,6 +4,10 @@
 
 > P2 已落地：MySQL 白名单元数据与聚合画像、复合键关系证据、自动候选编译和 `/ontology-review` 审核台。采集默认关闭，自动结果不进入发布区；人工移交后仍须独立审核与显式发布。配置、限制、测试和回退步骤见 [P2 实施记录](docs/implementation/2026-11-27-p2-candidate-discovery-and-review.md)。
 
+> P3 工程链路已落地：已批准 MetricContract → 结构化计划 → 确定性指标 SQL → P0 网关 → 私有执行证据。支持受控单源聚合、明确多对一连接、强制政策、幂等执行和政策变更后的结果/下载失效；默认放量比例为 0。API、合成评测、业务验收边界和回退步骤见 [P3 实施记录](docs/implementation/2026-11-28-p3-controlled-planning-and-metrics.md)。
+
+> P3 [本地生产工程验收](docs/implementation/2026-11-28-p3-local-production-acceptance.md)通过：255 项测试，覆盖签名 HTTP、真实 MySQL、10 客户端负载与恢复演练。灰度仍为 0；本地目录拒答对照不替代 E1 模型质量对照或真实业务放量验收。
+
 > 2026-11-25：已接入 P0 身份认证、受控 SQL 执行与审核式多库聚合。升级配置、测试证据和生产边界见 [P0 实施记录](docs/implementation/2026-11-25-p0-security-and-federation.md)。首次升级必须配置 `AUTH_SOURCE_GRANTS`；默认不授予查询权限。
 
 基于多Agent构建的chatbi

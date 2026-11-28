@@ -13,6 +13,7 @@ KINDS = {
     'Field': {'dataset_id', 'physical_name', 'dtype', 'primary_key'},
     'Relation': {'left_dataset', 'left_keys', 'right_dataset', 'right_keys', 'join_type', 'cardinality'},
     'Metric': {'expression', 'field_ids', 'aggregation', 'grain', 'unit', 'time_definition', 'filters'},
+    'MetricContract': {'metric_id', 'dataset_id', 'dimensions', 'filter_fields', 'relation_ids', 'time_field', 'timezone', 'required_filters'},
     'Mapping': {'concept_id', 'target_ids', 'expression'},
     'QualityRule': {'target_ids', 'definition'},
     'Policy': {'target_ids', 'definition'},
@@ -102,6 +103,13 @@ def _validate(document):
             if (not strings(a['field_ids']) or not strings(a['grain']) or not strings(a['filters'])
                     or any(not check_string(a[k], empty=True) for k in ('expression', 'aggregation', 'unit', 'time_definition'))):
                 raise invalid()
+        elif kind == 'MetricContract':
+            if (not all(strings(a[k]) for k in ('dimensions', 'filter_fields', 'relation_ids', 'required_filters'))
+                    or not check_string(a['metric_id']) or not check_string(a['dataset_id'])
+                    or (a['time_field'] is not None and not check_string(a['time_field']))
+                    or a['timezone'] not in ('UTC', 'Asia/Shanghai')
+                    or not set(a['required_filters']) <= set(a['filter_fields'])):
+                raise invalid('指标编译契约字段无效')
         elif kind == 'Mapping':
             if not strings(a['target_ids'], nonempty=True) or not check_string(a['expression'], empty=True):
                 raise invalid()
@@ -151,6 +159,16 @@ def _validate(document):
         elif e['kind'] == 'Metric':
             for identity in a['field_ids'] + a['grain']:
                 ref(e, identity, 'Field')
+                required.add(identity)
+        elif e['kind'] == 'MetricContract':
+            for key, kind in (('metric_id', 'Metric'), ('dataset_id', 'Dataset')):
+                ref(e, a[key], kind)
+                required.add(a[key])
+            for identity in a['dimensions'] + a['filter_fields'] + ([a['time_field']] if a['time_field'] else []):
+                ref(e, identity, 'Field')
+                required.add(identity)
+            for identity in a['relation_ids']:
+                ref(e, identity, 'Relation')
                 required.add(identity)
         elif e['kind'] in ('Mapping', 'QualityRule', 'Policy', 'Evidence'):
             required.update(a['target_ids'])

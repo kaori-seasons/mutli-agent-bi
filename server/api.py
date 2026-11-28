@@ -79,6 +79,9 @@ def get_result(msg, trace_id, user_id="", mode_type="normal", *, principal=None,
         raise ServiceError("AUTH_REQUIRED", "查询需要可信身份", 401)
     infos = conf.get_mysql_conf_by_question(msg[-1]["content"], principal.sources, source_ids)
     ids = [info["source_id"] for info in infos]
+    if isinstance(ontology_options, dict) and ('plan_id' in ontology_options or 'idempotency_key' in ontology_options):
+        from ontology.planner.runtime import chat
+        return chat(principal, conf.mysql_info, ids, ontology_options)
     budget = QueryBudget()
     templates = conf.get_sql_templates()
     scope = {name for name, entry in templates.items()
